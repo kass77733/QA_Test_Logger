@@ -3,6 +3,8 @@ import time
 from datetime import datetime
 from PIL import Image, ImageGrab
 from io import BytesIO
+import json
+from typing import Optional
 
 
 class ImageUtils:
@@ -192,3 +194,44 @@ class DateUtils:
             return int(dt.timestamp())
         except ValueError:
             return None
+
+
+class SettingsUtils:
+    """应用设置读写工具"""
+    SETTINGS_PATH = os.path.join('data', 'settings.json')
+
+    @staticmethod
+    def _ensure_dir():
+        os.makedirs(os.path.dirname(SettingsUtils.SETTINGS_PATH), exist_ok=True)
+
+    @staticmethod
+    def read_settings():
+        SettingsUtils._ensure_dir()
+        if not os.path.exists(SettingsUtils.SETTINGS_PATH):
+            return {}
+        try:
+            with open(SettingsUtils.SETTINGS_PATH, 'r', encoding='utf-8') as f:
+                return json.load(f) or {}
+        except Exception:
+            return {}
+
+    @staticmethod
+    def write_settings(data: dict):
+        SettingsUtils._ensure_dir()
+        try:
+            with open(SettingsUtils.SETTINGS_PATH, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"写入设置失败: {e}")
+
+    @staticmethod
+    def get_last_collection_name():
+        data = SettingsUtils.read_settings()
+        return data.get('last_collection_name')
+
+    @staticmethod
+    def set_last_collection_name(name: Optional[str]):
+        data = SettingsUtils.read_settings()
+        if name:
+            data['last_collection_name'] = name
+        SettingsUtils.write_settings(data)

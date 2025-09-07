@@ -8,7 +8,8 @@ from PyQt6.QtGui import QColor, QBrush
 
 from ui_execution import TestCaseExecutionWidget
 from excel_parser import ExcelParser
-from PyQt6.QtWidgets import QInputDialog
+from PyQt6.QtWidgets import QInputDialog, QPushButton
+from utils import SettingsUtils
 
 
 class TestCasesTab(QWidget):
@@ -18,7 +19,7 @@ class TestCasesTab(QWidget):
         super().__init__(parent)
         self.db = db
         self.initUI()
-        self.load_test_cases()
+        # 默认进入时不加载任何用例，保持左侧空白
     
     def initUI(self):
         """初始化UI"""
@@ -36,6 +37,11 @@ class TestCasesTab(QWidget):
         self.refresh_button = QPushButton("刷新列表")
         self.refresh_button.clicked.connect(self.load_test_cases)
         button_layout.addWidget(self.refresh_button)
+
+        # 清空列表按钮（仅UI清空，不删除数据库）
+        self.clear_button = QPushButton("清空列表")
+        self.clear_button.clicked.connect(self.clear_cases_table)
+        button_layout.addWidget(self.clear_button)
         
         button_layout.addStretch()
         self.layout.addLayout(button_layout)
@@ -171,12 +177,20 @@ class TestCasesTab(QWidget):
                 # 同时写入到每条用例的字段（以便导出与外部使用），数据库导入时也会使用此名称
                 for c in cases_data:
                     c['案例集名称'] = collection_name
+                # 记录最近一次导入的集合名
+                SettingsUtils.set_last_collection_name(collection_name)
             
             # 导入数据库（传入collection_name以防Excel未写入对应列）
             success_count, total_count = self.db.import_test_cases(cases_data, collection_name)
             
-            # 刷新列表
-            self.load_test_cases()
+            # 仅将本次导入的用例追加到当前表格（不全量刷新）
+            imported_ids = [c.get('用例ID') for c in cases_data if c.get('用例ID')]
+            new_cases = []
+            for cid in imported_ids:
+                case = self.db.get_test_case(cid)
+                if case:
+                    new_cases.append(case)
+            self.add_cases_to_table(new_cases)
             
             # 打印结果
             print(f"导入成功：已导入 {success_count}/{total_count} 条测试用例")
@@ -242,3 +256,66 @@ class TestCasesTab(QWidget):
                         cell_item.setBackground(brush)
                 
                 break
+
+    def clear_cases_table(self):
+        """仅清空左侧用例列表（不删除数据库数据）"""
+        self.cases_table.setRowCount(0)
+
+    def _get_displayed_case_ids(self):
+        ids = set()
+        for row in range(self.cases_table.rowCount()):
+            item = self.cases_table.item(row, 0)
+            if item:
+                ids.add(item.text())
+        return ids
+
+    def add_cases_to_table(self, cases):
+        """将给定用例列表追加到当前表格，避免重复并应用状态着色"""
+        if not cases:
+            return
+        # 获取最新执行状态
+        executed_cases = {}
+        try:
+            records = self.db.get_latest_records()
+            for case_id, record in records.items():
+                executed_cases[case_id] = record['status']
+        except Exception as e:
+            print(f"获取执行记录失败: {str(e)}")
+
+        existing_ids = self._get_displayed_case_ids()
+        for case in cases:
+            case_id = case['case_id']
+            if case_id in existing_ids:
+                continue
+            row = self.cases_table.rowCount()
+            self.cases_table.insertRow(row)
+
+            id_item = QTableWidgetItem(case_id)
+            scenario_item = QTableWidgetItem(case['scenario'])
+            precondition_item = QTableWidgetItem((case.get('test_steps') or case.get('precondition') or ""))
+            expected_item = QTableWidgetItem(case['expected_result'])
+            priority_item = QTableWidgetItem(case['priority'] or "")
+
+            # 着色
+            if case_id in executed_cases:
+                status = executed_cases[case_id]
+                if status == "通过":
+                    color = QColor(200, 255, 200)
+                elif status == "失败":
+                    color = QColor(255, 200, 200)
+                elif status == "阻塞":
+                    color = QColor(255, 255, 200)
+                else:
+                    color = QColor(200, 200, 255)
+                brush = QBrush(color)
+                id_item.setBackground(brush)
+                scenario_item.setBackground(brush)
+                precondition_item.setBackground(brush)
+                expected_item.setBackground(brush)
+                priority_item.setBackground(brush)
+
+            self.cases_table.setItem(row, 0, id_item)
+            self.cases_table.setItem(row, 1, scenario_item)
+            self.cases_table.setItem(row, 2, precondition_item)
+            self.cases_table.setItem(row, 3, expected_item)
+            self.cases_table.setItem(row, 4, priority_item)

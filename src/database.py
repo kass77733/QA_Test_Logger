@@ -150,6 +150,18 @@ class Database:
         
         for case in cases_data:
             try:
+                # 读取已存在的案例集名称，避免被空值覆盖
+                existing_name = None
+                try:
+                    self.cursor.execute('SELECT case_collection_name FROM test_cases WHERE case_id = ?', (case.get('用例ID', ''),))
+                    row = self.cursor.fetchone()
+                    if row:
+                        # row 可能是 Row 或 dict
+                        existing_name = row['case_collection_name'] if isinstance(row, sqlite3.Row) or isinstance(row, dict) else row[0]
+                except sqlite3.Error:
+                    existing_name = None
+
+                final_collection_name = (case.get('案例集名称') or case_collection_name or existing_name)
                 self.cursor.execute('''
                 INSERT OR REPLACE INTO test_cases 
                 (case_id, scenario, test_steps, expected_result, priority, case_collection_name)
@@ -160,7 +172,7 @@ class Database:
                     (case.get('测试步骤') or case.get('前置条件') or ''),
                     case.get('预期结果', ''),
                     case.get('优先级', ''),
-                    (case.get('案例集名称') or case_collection_name or None)
+                    final_collection_name
                 ))
                 success_count += 1
             except sqlite3.Error as e:
