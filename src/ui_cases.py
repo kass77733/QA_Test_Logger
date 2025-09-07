@@ -325,6 +325,12 @@ class TestCasesTab(QWidget):
                 precondition_item.setBackground(brush)
                 expected_item.setBackground(brush)
                 priority_item.setBackground(brush)
+                # 记录最新记录ID，便于右侧反显结果
+                try:
+                    if case_id in records and 'record_id' in records[case_id]:
+                        id_item.setData(Qt.ItemDataRole.UserRole, records[case_id]['record_id'])
+                except Exception:
+                    pass
 
             self.cases_table.setItem(row, 0, id_item)
             self.cases_table.setItem(row, 1, scenario_item)
