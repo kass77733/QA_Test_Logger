@@ -37,7 +37,7 @@ class Database:
         CREATE TABLE IF NOT EXISTS test_cases (
             case_id TEXT PRIMARY KEY,
             scenario TEXT NOT NULL,
-            precondition TEXT,
+            test_steps TEXT,
             expected_result TEXT NOT NULL,
             priority TEXT
         )
@@ -72,6 +72,7 @@ class Database:
         
         # 检查是否需要迁移旧数据
         self._migrate_old_image_data()
+        self._migrate_precondition_to_test_steps()
     
     def _migrate_old_image_data(self):
         """迁移旧的图片数据到新表"""
@@ -101,6 +102,23 @@ class Database:
                 self.conn.commit()
         except sqlite3.Error as e:
             print(f"迁移图片数据失败: {e}")
+
+    def _migrate_precondition_to_test_steps(self):
+        """将旧列 precondition 迁移为 test_steps，保留原列以兼容旧数据"""
+        try:
+            self.cursor.execute("PRAGMA table_info(test_cases)")
+            columns = self.cursor.fetchall()
+            has_pre = any(col['name'] == 'precondition' for col in columns)
+            has_steps = any(col['name'] == 'test_steps' for col in columns)
+
+            if not has_steps and has_pre:
+                # 增加新列
+                self.cursor.execute("ALTER TABLE test_cases ADD COLUMN test_steps TEXT")
+                # 将旧数据复制到新列
+                self.cursor.execute("UPDATE test_cases SET test_steps = precondition WHERE test_steps IS NULL")
+                self.conn.commit()
+        except sqlite3.Error as e:
+            print(f"迁移前置条件到测试步骤失败: {e}")
     
     def import_test_cases(self, cases_data):
         """
@@ -119,12 +137,12 @@ class Database:
             try:
                 self.cursor.execute('''
                 INSERT OR REPLACE INTO test_cases 
-                (case_id, scenario, precondition, expected_result, priority)
+                (case_id, scenario, test_steps, expected_result, priority)
                 VALUES (?, ?, ?, ?, ?)
                 ''', (
                     case.get('用例ID', ''),
                     case.get('测试场景', ''),
-                    case.get('前置条件', ''),
+                    (case.get('测试步骤') or case.get('前置条件') or ''),
                     case.get('预期结果', ''),
                     case.get('优先级', '')
                 ))
@@ -136,14 +154,26 @@ class Database:
         return success_count, total_count
     
     def get_all_test_cases(self):
-        """获取所有测试用例"""
+        """获取所有测试用例，兼容旧数据，将 test_steps 标准化"""
         self.cursor.execute('SELECT * FROM test_cases')
-        return self.cursor.fetchall()
+        rows = self.cursor.fetchall()
+        normalized = []
+        for row in rows:
+            row_dict = dict(row)
+            # 兼容：优先使用 test_steps，其次使用 precondition
+            row_dict['test_steps'] = row_dict.get('test_steps') or row_dict.get('precondition') or None
+            normalized.append(row_dict)
+        return normalized
     
     def get_test_case(self, case_id):
-        """获取指定ID的测试用例"""
+        """获取指定ID的测试用例，兼容旧数据，将 test_steps 标准化"""
         self.cursor.execute('SELECT * FROM test_cases WHERE case_id = ?', (case_id,))
-        return self.cursor.fetchone()
+        row = self.cursor.fetchone()
+        if not row:
+            return None
+        row_dict = dict(row)
+        row_dict['test_steps'] = row_dict.get('test_steps') or row_dict.get('precondition') or None
+        return row_dict
     
     def save_test_record(self, case_id, status, actual_result='', notes='', image_paths=None, executor=''):
         """
@@ -425,13 +455,12 @@ class Database:
                 export_data = {
                     '用例ID': case['case_id'],
                     '测试场景': case['scenario'],
-                    '前置条件': case['precondition'],
+                    '测试步骤': case.get('test_steps'),
                     '预期结果': case['expected_result'],
                     '优先级': case['priority'],
                     '执行状态': record['status'],
                     '实际结果': record['actual_result'],
                     '备注': record['notes'],
-                    '执行人': record['executor'],
                     '执行时间': record['timestamp'],
                     '图片': record['images']
                 }

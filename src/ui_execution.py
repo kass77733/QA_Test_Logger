@@ -37,9 +37,9 @@ class TestCaseExecutionWidget(QWidget):
         scenario_layout.addWidget(self.scenario_label)
         case_info_layout.addLayout(scenario_layout)
         
-        # 前置条件
+        # 测试步骤
         precondition_layout = QHBoxLayout()
-        precondition_layout.addWidget(QLabel("前置条件:"))
+        precondition_layout.addWidget(QLabel("测试步骤:"))
         self.precondition_label = QLabel()
         precondition_layout.addWidget(self.precondition_label)
         case_info_layout.addLayout(precondition_layout)
@@ -72,10 +72,13 @@ class TestCaseExecutionWidget(QWidget):
         status_layout.addWidget(self.status_combo)
         execution_layout.addLayout(status_layout)
         
-        # 执行人
+        # 执行人（隐藏不展示，仍保留字段以兼容数据库）
         executor_layout = QHBoxLayout()
-        executor_layout.addWidget(QLabel("执行人:"))
+        executor_label = QLabel("执行人:")
+        executor_label.setVisible(False)
+        executor_layout.addWidget(executor_label)
         self.executor_edit = QLineEdit()
+        self.executor_edit.setVisible(False)
         executor_layout.addWidget(self.executor_edit)
         execution_layout.addLayout(executor_layout)
         
@@ -113,7 +116,7 @@ class TestCaseExecutionWidget(QWidget):
         
         # 更新UI
         self.scenario_label.setText(case['scenario'])
-        self.precondition_label.setText(case['precondition'] or "无")
+        self.precondition_label.setText((case.get('test_steps') or case.get('precondition') or "无"))
         self.expected_label.setText(case['expected_result'])
         self.priority_label.setText(case['priority'] or "无")
         
@@ -137,7 +140,7 @@ class TestCaseExecutionWidget(QWidget):
         if status_index >= 0:
             self.status_combo.setCurrentIndex(status_index)
         
-        self.executor_edit.setText(record['executor'] or "")
+        self.executor_edit.setText(record.get('executor') or "")
         self.actual_result_edit.setText(record['actual_result'] or "")
         self.notes_edit.setText(record['notes'] or "")
         

@@ -45,7 +45,7 @@ class TestCasesTab(QWidget):
         # 左侧用例列表
         self.cases_table = QTableWidget()
         self.cases_table.setColumnCount(5)
-        self.cases_table.setHorizontalHeaderLabels(["用例ID", "测试场景", "前置条件", "预期结果", "优先级"])
+        self.cases_table.setHorizontalHeaderLabels(["用例ID", "测试场景", "测试步骤", "预期结果", "优先级"])
         self.cases_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.cases_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.cases_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
@@ -90,7 +90,7 @@ class TestCasesTab(QWidget):
                 # 创建表格项
                 id_item = QTableWidgetItem(case_id)
                 scenario_item = QTableWidgetItem(case['scenario'])
-                precondition_item = QTableWidgetItem(case['precondition'] or "")
+                precondition_item = QTableWidgetItem((case.get('test_steps') or case.get('precondition') or ""))
                 expected_item = QTableWidgetItem(case['expected_result'])
                 priority_item = QTableWidgetItem(case['priority'] or "")
                 

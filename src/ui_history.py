@@ -137,7 +137,7 @@ class ExportThread(QThread):
                 # 添加用例信息
                 elements.append(Paragraph(f"用例ID: {record['用例ID']}", styles["Heading2"]))
                 elements.append(Paragraph(f"测试场景: {record['测试场景']}", styles["Normal"]))
-                elements.append(Paragraph(f"前置条件: {record['前置条件'] or '无'}", styles["Normal"]))
+                elements.append(Paragraph(f"测试步骤: {record.get('测试步骤') or '无'}", styles["Normal"]))
                 elements.append(Paragraph(f"预期结果: {record['预期结果']}", styles["Normal"]))
                 elements.append(Paragraph(f"优先级: {record['优先级'] or '无'}", styles["Normal"]))
                 elements.append(Spacer(1, 10))
@@ -147,7 +147,7 @@ class ExportThread(QThread):
                 elements.append(Paragraph(f"状态: {record['执行状态']}", styles["Normal"]))
                 elements.append(Paragraph(f"实际结果: {record['实际结果'] or '无'}", styles["Normal"]))
                 elements.append(Paragraph(f"备注: {record['备注'] or '无'}", styles["Normal"]))
-                elements.append(Paragraph(f"执行人: {record['执行人'] or '无'}", styles["Normal"]))
+                # 不展示执行人
                 
                 # 添加执行时间
                 timestamp = record['执行时间']
@@ -220,13 +220,12 @@ class ExportThread(QThread):
             row_data = {
                 '用例ID': record['用例ID'],
                 '测试场景': record['测试场景'],
-                '前置条件': record['前置条件'] or '',
+                '测试步骤': record.get('测试步骤') or '',
                 '预期结果': record['预期结果'],
                 '优先级': record['优先级'] or '',
                 '执行状态': record['执行状态'],
                 '实际结果': record['实际结果'] or '',
                 '备注': record['备注'] or '',
-                '执行人': record['执行人'] or '',
                 '执行时间': DateUtils.timestamp_to_string(record['执行时间']),
                 '图片': ', '.join(image_refs)
             }
@@ -332,13 +331,13 @@ class HistoryTab(QWidget):
         
         # 记录列表
         self.records_table = QTableWidget()
-        self.records_table.setColumnCount(7)
+        self.records_table.setColumnCount(6)
         self.records_table.setHorizontalHeaderLabels([
-            "记录ID", "用例ID", "执行状态", "实际结果", "备注", "执行人", "执行时间"
+            "记录ID", "用例ID", "测试场景", "实际结果", "执行状态", "执行时间"
         ])
         self.records_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        self.records_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.records_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
-        self.records_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         self.records_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.records_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         # 添加双击事件
@@ -422,15 +421,15 @@ class HistoryTab(QWidget):
                 
                 # 设置其他列
                 self.records_table.setItem(row, 1, QTableWidgetItem(record['case_id']))
-                self.records_table.setItem(row, 2, QTableWidgetItem(record['status']))
+                case = self.db.get_test_case(record['case_id'])
+                self.records_table.setItem(row, 2, QTableWidgetItem((case['scenario'] if case else "")))
                 self.records_table.setItem(row, 3, QTableWidgetItem(record['actual_result'] or ""))
-                self.records_table.setItem(row, 4, QTableWidgetItem(record['notes'] or ""))
-                self.records_table.setItem(row, 5, QTableWidgetItem(record['executor'] or ""))
+                self.records_table.setItem(row, 4, QTableWidgetItem(record['status']))
                 
                 # 格式化时间戳
                 timestamp = record['timestamp']
                 date_str = DateUtils.timestamp_to_string(timestamp)
-                self.records_table.setItem(row, 6, QTableWidgetItem(date_str))
+                self.records_table.setItem(row, 5, QTableWidgetItem(date_str))
             
             # 更新统计信息
             stats = self.db.get_statistics(start_date, end_date)
@@ -571,14 +570,14 @@ class HistoryTab(QWidget):
                 # 添加测试用例信息（如果可用）
                 if case:
                     details += f"测试场景: {case['scenario']}\n"
-                    details += f"前置条件: {case['precondition'] or '无'}\n"
+                    details += f"测试步骤: {(case.get('test_steps') or case.get('precondition') or '无')}\n"
                     details += f"预期结果: {case['expected_result']}\n"
                     details += f"优先级: {case['priority'] or '无'}\n\n"
                 
                 details += f"执行状态: {record['status']}\n"
                 details += f"实际结果: {record['actual_result'] or '无'}\n"
                 details += f"备注: {record['notes'] or '无'}\n"
-                details += f"执行人: {record['executor'] or '无'}\n"
+                # 不展示执行人
                 details += f"执行时间: {DateUtils.timestamp_to_string(record['timestamp'])}\n"
                 
                 # 设置详情文本
