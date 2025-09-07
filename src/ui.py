@@ -3,6 +3,8 @@ from PyQt6.QtWidgets import QMainWindow, QTabWidget
 from database import Database
 from ui_cases import TestCasesTab
 from ui_history import HistoryTab
+from PyQt6.QtGui import QIcon
+import os
 
 
 class MainWindow(QMainWindow):
@@ -17,6 +19,14 @@ class MainWindow(QMainWindow):
         """初始化UI"""
         self.setWindowTitle("Testar")
         self.setGeometry(100, 100, 1200, 800)
+        # 同步设置主窗口图标（部分平台只读取窗口图标）
+        base_dir = os.path.dirname(__file__)
+        icon_path_ico = os.path.join(base_dir, 'icon.ico')
+        icon_path_png = os.path.join(base_dir, 'icon.png')
+        if os.path.exists(icon_path_ico):
+            self.setWindowIcon(QIcon(icon_path_ico))
+        elif os.path.exists(icon_path_png):
+            self.setWindowIcon(QIcon(icon_path_png))
         
         # 创建标签页
         self.tabs = QTabWidget()

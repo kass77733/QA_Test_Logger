@@ -17,8 +17,14 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle('Fusion')  # 使用Fusion风格，在不同平台上保持一致的外观
     
-    # 设置应用图标
-    app.setWindowIcon(QIcon('icon.png'))  # 如果有图标文件，可以取消注释
+    # 设置应用图标（使用绝对路径，避免工作目录变化导致找不到）
+    base_dir = os.path.dirname(__file__)
+    icon_path_ico = os.path.join(base_dir, 'icon.ico')
+    icon_path_png = os.path.join(base_dir, 'icon.png')
+    if os.path.exists(icon_path_ico):
+        app.setWindowIcon(QIcon(icon_path_ico))
+    elif os.path.exists(icon_path_png):
+        app.setWindowIcon(QIcon(icon_path_png))
     
     # 显示启动画面
     splash_pix = QPixmap(400, 200)
