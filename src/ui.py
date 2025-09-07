@@ -15,7 +15,7 @@ class MainWindow(QMainWindow):
     
     def initUI(self):
         """初始化UI"""
-        self.setWindowTitle("QA Test Logger")
+        self.setWindowTitle("Testar")
         self.setGeometry(100, 100, 1200, 800)
         
         # 创建标签页

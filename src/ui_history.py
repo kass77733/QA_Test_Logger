@@ -10,12 +10,15 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QDate, pyqtSignal, QThread, QTimer
 
 from utils import DateUtils
+from database import Database
 
 import pandas as pd
 from reportlab.lib.pagesizes import A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 
 
 class ExportThread(QThread):
@@ -28,7 +31,8 @@ class ExportThread(QThread):
     
     def __init__(self, db, export_type, file_path, filters=None):
         super().__init__()
-        self.db = db
+        # 仅保存数据库路径，线程内重新建立连接，避免SQLite跨线程使用
+        self.db_path = db.db_path if hasattr(db, 'db_path') else 'data/qa_test_logger.db'
         self.export_type = export_type  # "pdf" 或 "excel"
         self.file_path = file_path
         self.filters = filters or {}  # 筛选条件
@@ -36,12 +40,16 @@ class ExportThread(QThread):
     def run(self):
         """线程执行函数"""
         try:
+            # 在线程内创建新的数据库连接，避免跨线程问题
+            db = Database(self.db_path)
             # 获取记录数据
-            records = self.db.export_test_records(
+            records = db.export_test_records(
                 self.filters.get('start_date'),
                 self.filters.get('end_date'),
                 self.filters.get('case_id'),
-                self.filters.get('status')
+                self.filters.get('status'),
+                self.filters.get('collection_name'),
+                self.filters.get('search_text')
             )
             
             if not records:
@@ -75,6 +83,15 @@ class ExportThread(QThread):
             # 创建PDF文档
             doc = SimpleDocTemplate(self.file_path, pagesize=A4)
             styles = getSampleStyleSheet()
+            # 确保中文可显示：注册支持中文的字体并应用到样式
+            try:
+                pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+                for key in ["Title", "Heading2", "Heading3", "Normal"]:
+                    if key in styles:
+                        styles[key].fontName = 'STSong-Light'
+            except Exception:
+                # 忽略字体注册失败，继续使用默认字体
+                pass
             elements = []
             
             # 添加标题
@@ -82,11 +99,19 @@ class ExportThread(QThread):
             elements.append(Paragraph("测试执行报告", title_style))
             elements.append(Spacer(1, 20))
             
-            # 添加统计信息
-            stats = self.db.get_statistics(
-                self.filters.get('start_date'),
-                self.filters.get('end_date')
-            )
+            # 添加统计信息（基于当前导出记录计算，避免跨线程DB依赖）
+            stats = {
+                'total': len(records),
+                '通过': 0,
+                '失败': 0,
+                '阻塞': 0,
+                '跳过': 0
+            }
+            for r in records:
+                status = r.get('执行状态')
+                if status in stats:
+                    stats[status] += 1
+            stats['通过率'] = (stats['通过'] / stats['total'] * 100) if stats['total'] > 0 else 0
             
             stats_data = [
                 ["总记录数", "通过", "失败", "阻塞", "跳过", "通过率"],
@@ -102,12 +127,16 @@ class ExportThread(QThread):
             
             stats_table = Table(stats_data)
             stats_table.setStyle(TableStyle([
+                # 表头与内容区域背景/对齐
                 ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                 ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
                 ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+                # 中文字体应用到整张表
+                ('FONTNAME', (0, 0), (-1, -1), 'STSong-Light'),
+                # 表头可加粗：使用默认粗体可能不支持中文，保持中文字体避免乱码
+                # ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('GRID', (0, 0), (-1, -1), 1, colors.black)
             ]))
             
@@ -144,7 +173,20 @@ class ExportThread(QThread):
                 
                 # 添加执行结果
                 elements.append(Paragraph("执行结果", styles["Heading3"]))
-                elements.append(Paragraph(f"状态: {record['执行状态']}", styles["Normal"]))
+                # 根据执行状态设置颜色
+                status = record['执行状态']
+                status_color = colors.black
+                if status == "通过":
+                    status_color = colors.green
+                elif status == "失败":
+                    status_color = colors.red
+                elif status == "阻塞":
+                    status_color = colors.orange
+                elif status == "跳过":
+                    status_color = colors.blue
+                status_style = styles["Normal"].clone("StatusStyle")
+                status_style.textColor = status_color
+                elements.append(Paragraph(f"状态: {status}", status_style))
                 elements.append(Paragraph(f"实际结果: {record['实际结果'] or '无'}", styles["Normal"]))
                 elements.append(Paragraph(f"备注: {record['备注'] or '无'}", styles["Normal"]))
                 # 不展示执行人
@@ -237,7 +279,28 @@ class ExportThread(QThread):
         
         # 创建DataFrame并导出
         df = pd.DataFrame(export_data)
-        df.to_excel(self.file_path, index=False)
+        # 使用xlsxwriter为“执行状态”列添加条件格式
+        try:
+            with pd.ExcelWriter(self.file_path, engine='xlsxwriter') as writer:
+                df.to_excel(writer, index=False, sheet_name='记录')
+                workbook  = writer.book
+                worksheet = writer.sheets['记录']
+                # 找到“执行状态”列索引
+                headers = list(df.columns)
+                if '执行状态' in headers:
+                    status_col_idx = headers.index('执行状态')
+                    # 数据区域行数
+                    nrows = len(df) + 1  # 包含表头占1行
+                    col_letter = chr(ord('A') + status_col_idx)
+                    rng = f"{col_letter}2:{col_letter}{nrows}"
+                    # 条件格式
+                    worksheet.conditional_format(rng, { 'type': 'text', 'criteria': 'containing', 'value': '通过', 'format': workbook.add_format({'bg_color': '#C8E6C9'}) })
+                    worksheet.conditional_format(rng, { 'type': 'text', 'criteria': 'containing', 'value': '失败', 'format': workbook.add_format({'bg_color': '#FFCDD2'}) })
+                    worksheet.conditional_format(rng, { 'type': 'text', 'criteria': 'containing', 'value': '阻塞', 'format': workbook.add_format({'bg_color': '#FFF9C4'}) })
+                    worksheet.conditional_format(rng, { 'type': 'text', 'criteria': 'containing', 'value': '跳过', 'format': workbook.add_format({'bg_color': '#BBDEFB'}) })
+        except Exception:
+            # 回退到普通写入
+            df.to_excel(self.file_path, index=False)
         
         self.progress_updated.emit(100)
 
@@ -481,8 +544,10 @@ class HistoryTab(QWidget):
         filters = {
             'start_date': DateUtils.string_to_timestamp(self.start_date.date().toString("yyyy-MM-dd")),
             'end_date': DateUtils.string_to_timestamp(self.end_date.date().addDays(1).toString("yyyy-MM-dd")),
-            'case_id': self.search_edit.text().strip() or None,
-            'status': self.status_combo.currentText() if self.status_combo.currentText() != "全部" else None
+            'case_id': None,  # 与历史界面一致：搜索框可输入用例ID或场景，下方用search_text处理
+            'status': self.status_combo.currentText() if self.status_combo.currentText() != "全部" else None,
+            'collection_name': (self.collection_combo.currentText() if self.collection_combo.currentText() != "全部" else None),
+            'search_text': (self.search_edit.text().strip() or None)
         }
         
         # 创建并启动导出线程
@@ -518,8 +583,10 @@ class HistoryTab(QWidget):
         filters = {
             'start_date': DateUtils.string_to_timestamp(self.start_date.date().toString("yyyy-MM-dd")),
             'end_date': DateUtils.string_to_timestamp(self.end_date.date().addDays(1).toString("yyyy-MM-dd")),
-            'case_id': self.search_edit.text().strip() or None,
-            'status': self.status_combo.currentText() if self.status_combo.currentText() != "全部" else None
+            'case_id': None,
+            'status': self.status_combo.currentText() if self.status_combo.currentText() != "全部" else None,
+            'collection_name': (self.collection_combo.currentText() if self.collection_combo.currentText() != "全部" else None),
+            'search_text': (self.search_edit.text().strip() or None)
         }
         
         # 创建并启动导出线程

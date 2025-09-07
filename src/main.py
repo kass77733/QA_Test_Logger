@@ -18,7 +18,7 @@ def main():
     app.setStyle('Fusion')  # 使用Fusion风格，在不同平台上保持一致的外观
     
     # 设置应用图标
-    # app.setWindowIcon(QIcon('icon.png'))  # 如果有图标文件，可以取消注释
+    app.setWindowIcon(QIcon('icon.png'))  # 如果有图标文件，可以取消注释
     
     # 显示启动画面
     splash_pix = QPixmap(400, 200)

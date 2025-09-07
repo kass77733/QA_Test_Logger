@@ -472,7 +472,7 @@ class Database:
         
         return result
     
-    def export_test_records(self, start_date=None, end_date=None, case_id=None, status=None):
+    def export_test_records(self, start_date=None, end_date=None, case_id=None, status=None, collection_name=None, search_text=None):
         """
         导出测试记录数据
         
@@ -481,6 +481,8 @@ class Database:
             end_date: 可选，结束日期（时间戳）
             case_id: 可选，按用例ID筛选
             status: 可选，按状态筛选
+            collection_name: 可选，按案例集名称筛选
+            search_text: 可选，和历史界面一致的搜索逻辑（中文匹配场景，否则匹配用例ID）
             
         Returns:
             list: 包含完整测试记录数据的列表
@@ -492,20 +494,37 @@ class Database:
         result = []
         for record in records:
             case = self.get_test_case(record['case_id'])
-            if case:
-                # 合并用例和记录数据
-                export_data = {
-                    '用例ID': case['case_id'],
-                    '测试场景': case['scenario'],
-                    '测试步骤': case.get('test_steps'),
-                    '预期结果': case['expected_result'],
-                    '优先级': case['priority'],
-                    '执行状态': record['status'],
-                    '实际结果': record['actual_result'],
-                    '备注': record['notes'],
-                    '执行时间': record['timestamp'],
-                    '图片': record['images']
-                }
-                result.append(export_data)
+            if not case:
+                continue
+
+            # 按案例集筛选
+            if collection_name:
+                if (case.get('case_collection_name') or '') != collection_name:
+                    continue
+
+            # 按搜索关键字筛选（与历史记录界面逻辑一致）
+            if search_text:
+                has_chinese = any('\u4e00' <= char <= '\u9fff' for char in search_text)
+                if has_chinese:
+                    if not case.get('scenario') or search_text.lower() not in case['scenario'].lower():
+                        continue
+                else:
+                    if search_text.lower() not in record['case_id'].lower():
+                        continue
+
+            # 合并用例和记录数据
+            export_data = {
+                '用例ID': case['case_id'],
+                '测试场景': case['scenario'],
+                '测试步骤': case.get('test_steps'),
+                '预期结果': case['expected_result'],
+                '优先级': case['priority'],
+                '执行状态': record['status'],
+                '实际结果': record['actual_result'],
+                '备注': record['notes'],
+                '执行时间': record['timestamp'],
+                '图片': record['images']
+            }
+            result.append(export_data)
         
         return result

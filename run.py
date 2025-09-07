@@ -26,7 +26,7 @@ def main():
         install_requirements()
     
     # 启动应用
-    print("正在启动 QA Test Logger...")
+    print("正在启动 Testar...")
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
     subprocess.call([sys.executable, "src/main.py"])
 
