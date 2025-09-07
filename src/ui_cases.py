@@ -34,9 +34,9 @@ class TestCasesTab(QWidget):
         button_layout.addWidget(self.import_button)
         
         # 刷新按钮
-        self.refresh_button = QPushButton("刷新列表")
-        self.refresh_button.clicked.connect(self.load_test_cases)
-        button_layout.addWidget(self.refresh_button)
+        # self.refresh_button = QPushButton("刷新列表")
+        # self.refresh_button.clicked.connect(self.load_test_cases)
+        # button_layout.addWidget(self.refresh_button)
 
         # 清空列表按钮（仅UI清空，不删除数据库）
         self.clear_button = QPushButton("清空列表")

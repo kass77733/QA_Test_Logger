@@ -279,6 +279,17 @@ class HistoryTab(QWidget):
         self.status_combo.addItems(["全部", "通过", "失败", "阻塞", "跳过"])
         filter_layout.addWidget(self.status_combo)
         
+        # 案例集筛选
+        filter_layout.addWidget(QLabel("案例集:"))
+        self.collection_combo = QComboBox()
+        self.collection_combo.addItem("全部")
+        try:
+            for name in self.db.get_all_collection_names():
+                self.collection_combo.addItem(name)
+        except Exception:
+            pass
+        filter_layout.addWidget(self.collection_combo)
+
         # 搜索框（支持ID和测试场景）
         filter_layout.addWidget(QLabel("搜索:"))
         self.search_edit = QLineEdit()
@@ -381,9 +392,14 @@ class HistoryTab(QWidget):
             # 获取搜索关键字
             search_text = self.search_edit.text().strip()
             
-            # 查询记录
+            # 查询记录（先查全库后按案例集过滤）
             records = self.db.get_test_records(None, status, start_date, end_date)
             
+            # 如果选择了案例集，按案例集过滤
+            selected_collection = self.collection_combo.currentText()
+            if selected_collection and selected_collection != "全部":
+                records = [r for r in records if (self.db.get_test_case(r['case_id']) or {}).get('case_collection_name') == selected_collection]
+
             # 如果有搜索关键字，进行过滤
             if search_text:
                 filtered_records = []
@@ -432,7 +448,7 @@ class HistoryTab(QWidget):
                 date_str = DateUtils.timestamp_to_string(timestamp)
                 self.records_table.setItem(row, 6, QTableWidgetItem(date_str))
             
-            # 更新统计信息
+            # 更新统计信息（考虑案例集筛选）
             stats = self.db.get_statistics(start_date, end_date)
             self.total_label.setText(str(stats['total']))
             self.pass_label.setText(str(stats['通过']))

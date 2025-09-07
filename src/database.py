@@ -431,6 +431,20 @@ class Database:
             stats['通过率'] = 0
         
         return stats
+
+    def get_all_collection_names(self):
+        """获取所有案例集名称列表（去重）"""
+        try:
+            self.cursor.execute('''
+                SELECT DISTINCT case_collection_name AS name
+                FROM test_cases
+                WHERE case_collection_name IS NOT NULL AND case_collection_name != ''
+                ORDER BY case_collection_name
+            ''')
+            rows = self.cursor.fetchall()
+            return [row['name'] for row in rows]
+        except sqlite3.Error:
+            return []
     
     def get_latest_records(self):
         """
