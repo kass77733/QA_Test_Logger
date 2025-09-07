@@ -2,6 +2,7 @@ import os
 import sqlite3
 import json
 from datetime import datetime
+from typing import Optional
 
 
 class Database:
@@ -39,7 +40,8 @@ class Database:
             scenario TEXT NOT NULL,
             test_steps TEXT,
             expected_result TEXT NOT NULL,
-            priority TEXT
+            priority TEXT,
+            case_collection_name TEXT
         )
         ''')
         
@@ -73,6 +75,7 @@ class Database:
         # 检查是否需要迁移旧数据
         self._migrate_old_image_data()
         self._migrate_precondition_to_test_steps()
+        self._migrate_add_case_collection_name()
     
     def _migrate_old_image_data(self):
         """迁移旧的图片数据到新表"""
@@ -119,8 +122,20 @@ class Database:
                 self.conn.commit()
         except sqlite3.Error as e:
             print(f"迁移前置条件到测试步骤失败: {e}")
+
+    def _migrate_add_case_collection_name(self):
+        """为 test_cases 表增加 case_collection_name 列（如缺失）"""
+        try:
+            self.cursor.execute("PRAGMA table_info(test_cases)")
+            columns = self.cursor.fetchall()
+            has_col = any(col['name'] == 'case_collection_name' for col in columns)
+            if not has_col:
+                self.cursor.execute("ALTER TABLE test_cases ADD COLUMN case_collection_name TEXT")
+                self.conn.commit()
+        except sqlite3.Error as e:
+            print(f"添加案例集名称列失败: {e}")
     
-    def import_test_cases(self, cases_data):
+    def import_test_cases(self, cases_data, case_collection_name: Optional[str] = None):
         """
         导入测试用例数据
         
@@ -137,14 +152,15 @@ class Database:
             try:
                 self.cursor.execute('''
                 INSERT OR REPLACE INTO test_cases 
-                (case_id, scenario, test_steps, expected_result, priority)
-                VALUES (?, ?, ?, ?, ?)
+                (case_id, scenario, test_steps, expected_result, priority, case_collection_name)
+                VALUES (?, ?, ?, ?, ?, ?)
                 ''', (
                     case.get('用例ID', ''),
                     case.get('测试场景', ''),
                     (case.get('测试步骤') or case.get('前置条件') or ''),
                     case.get('预期结果', ''),
-                    case.get('优先级', '')
+                    case.get('优先级', ''),
+                    (case.get('案例集名称') or case_collection_name or None)
                 ))
                 success_count += 1
             except sqlite3.Error as e:

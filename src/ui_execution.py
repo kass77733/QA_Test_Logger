@@ -36,6 +36,13 @@ class TestCaseExecutionWidget(QWidget):
         self.scenario_label = QLabel()
         scenario_layout.addWidget(self.scenario_label)
         case_info_layout.addLayout(scenario_layout)
+
+        # 案例集名称
+        collection_layout = QHBoxLayout()
+        collection_layout.addWidget(QLabel("案例集名称:"))
+        self.collection_label = QLabel()
+        collection_layout.addWidget(self.collection_label)
+        case_info_layout.addLayout(collection_layout)
         
         # 测试步骤
         precondition_layout = QHBoxLayout()
@@ -116,6 +123,7 @@ class TestCaseExecutionWidget(QWidget):
         
         # 更新UI
         self.scenario_label.setText(case['scenario'])
+        self.collection_label.setText(case.get('case_collection_name') or "无")
         self.precondition_label.setText((case.get('test_steps') or case.get('precondition') or "无"))
         self.expected_label.setText(case['expected_result'])
         self.priority_label.setText(case['priority'] or "无")

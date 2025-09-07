@@ -8,6 +8,7 @@ from PyQt6.QtGui import QColor, QBrush
 
 from ui_execution import TestCaseExecutionWidget
 from excel_parser import ExcelParser
+from PyQt6.QtWidgets import QInputDialog
 
 
 class TestCasesTab(QWidget):
@@ -46,9 +47,15 @@ class TestCasesTab(QWidget):
         self.cases_table = QTableWidget()
         self.cases_table.setColumnCount(5)
         self.cases_table.setHorizontalHeaderLabels(["用例ID", "测试场景", "测试步骤", "预期结果", "优先级"])
-        self.cases_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        self.cases_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.cases_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        # 固定列宽，避免出现水平滚动条；刷新后保持
+        header = self.cases_table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
+        # 设置各列固定宽度（可按需微调）
+        self.cases_table.setColumnWidth(0, 50)  # 用例ID
+        self.cases_table.setColumnWidth(1, 100)  # 测试场景
+        self.cases_table.setColumnWidth(2, 100)  # 测试步骤
+        self.cases_table.setColumnWidth(3, 100)  # 预期结果
+        self.cases_table.setColumnWidth(4, 80)   # 优先级
         self.cases_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.cases_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.cases_table.itemClicked.connect(self.on_case_selected)
@@ -125,8 +132,7 @@ class TestCasesTab(QWidget):
                 self.cases_table.setItem(row, 3, expected_item)
                 self.cases_table.setItem(row, 4, priority_item)
             
-            # 调整列宽
-            self.cases_table.resizeColumnsToContents()
+            # 不再自动调整列宽，保持固定设置
             
             # 打印加载成功消息
             if cases:
@@ -148,9 +154,26 @@ class TestCasesTab(QWidget):
         try:
             # 解析Excel文件
             cases_data = ExcelParser.parse_excel(file_path)
+
+            # 判断是否首次导入（基于这些用例ID是否存在）
+            existing = self.db.get_all_test_cases()
+            existing_ids = set([row['case_id'] for row in existing])
+            new_case_ids = [c.get('用例ID', '') for c in cases_data if c.get('用例ID')]
+            is_first_import = all(cid not in existing_ids for cid in new_case_ids) and len(new_case_ids) > 0
+
+            collection_name = None
+            if is_first_import:
+                # 询问案例集名称
+                text, ok = QInputDialog.getText(self, "案例集名称", "请输入本次导入的案例集名称：")
+                if not ok:
+                    return
+                collection_name = text.strip() or None
+                # 同时写入到每条用例的字段（以便导出与外部使用），数据库导入时也会使用此名称
+                for c in cases_data:
+                    c['案例集名称'] = collection_name
             
-            # 导入数据库
-            success_count, total_count = self.db.import_test_cases(cases_data)
+            # 导入数据库（传入collection_name以防Excel未写入对应列）
+            success_count, total_count = self.db.import_test_cases(cases_data, collection_name)
             
             # 刷新列表
             self.load_test_cases()

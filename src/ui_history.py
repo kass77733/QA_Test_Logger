@@ -331,13 +331,13 @@ class HistoryTab(QWidget):
         
         # 记录列表
         self.records_table = QTableWidget()
-        self.records_table.setColumnCount(6)
+        self.records_table.setColumnCount(7)
         self.records_table.setHorizontalHeaderLabels([
-            "记录ID", "用例ID", "测试场景", "实际结果", "执行状态", "执行时间"
+            "记录ID", "用例ID", "测试场景", "案例集名称", "实际结果", "执行状态", "执行时间"
         ])
         self.records_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
         self.records_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        self.records_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.records_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
         self.records_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.records_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         # 添加双击事件
@@ -423,13 +423,14 @@ class HistoryTab(QWidget):
                 self.records_table.setItem(row, 1, QTableWidgetItem(record['case_id']))
                 case = self.db.get_test_case(record['case_id'])
                 self.records_table.setItem(row, 2, QTableWidgetItem((case['scenario'] if case else "")))
-                self.records_table.setItem(row, 3, QTableWidgetItem(record['actual_result'] or ""))
-                self.records_table.setItem(row, 4, QTableWidgetItem(record['status']))
+                self.records_table.setItem(row, 3, QTableWidgetItem((case.get('case_collection_name') if case else "") or ""))
+                self.records_table.setItem(row, 4, QTableWidgetItem(record['actual_result'] or ""))
+                self.records_table.setItem(row, 5, QTableWidgetItem(record['status']))
                 
                 # 格式化时间戳
                 timestamp = record['timestamp']
                 date_str = DateUtils.timestamp_to_string(timestamp)
-                self.records_table.setItem(row, 5, QTableWidgetItem(date_str))
+                self.records_table.setItem(row, 6, QTableWidgetItem(date_str))
             
             # 更新统计信息
             stats = self.db.get_statistics(start_date, end_date)
