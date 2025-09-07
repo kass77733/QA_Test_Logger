@@ -200,6 +200,12 @@ class TestCasesTab(QWidget):
     
     def on_case_selected(self, item):
         """处理用例选择事件"""
+        # 每次点击左侧用例时，先重置右侧图片预览，避免保留上一次预览
+        try:
+            if hasattr(self.execution_widget, 'image_list'):
+                self.execution_widget.image_list.setImages([])
+        except Exception:
+            pass
         row = item.row()
         id_item = self.cases_table.item(row, 0)
         case_id = id_item.text()
@@ -220,6 +226,12 @@ class TestCasesTab(QWidget):
         
         # 如果没有执行记录或获取失败，则正常显示用例
         self.execution_widget.set_test_case(case)
+        # 选择新用例后，确保图片列表清空
+        try:
+            if hasattr(self.execution_widget, 'image_list'):
+                self.execution_widget.image_list.setImages([])
+        except Exception:
+            pass
     
     def on_record_saved(self, record_id):
         """处理记录保存事件"""

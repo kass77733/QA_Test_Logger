@@ -202,6 +202,12 @@ class ImageListWidget(QWidget):
         # 清空当前列表
         self.image_list.clear()
         self.image_paths = []
+        # 重置预览与按钮状态
+        if hasattr(self, 'preview_label') and self.preview_label is not None:
+            self.preview_label.setText("选择图片查看预览")
+            self.preview_label.setPixmap(QPixmap())
+        if hasattr(self, 'delete_button') and self.delete_button is not None:
+            self.delete_button.setEnabled(False)
         
         # 添加新图片
         for path in image_paths:
