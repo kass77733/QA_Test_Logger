@@ -18,6 +18,7 @@ class TestCasesTab(QWidget):
     def __init__(self, db, parent=None):
         super().__init__(parent)
         self.db = db
+        self.collection_imported = None  # 案例集导入回调函数
         self.initUI()
         # 默认进入时不加载任何用例，保持左侧空白
     
@@ -191,6 +192,10 @@ class TestCasesTab(QWidget):
                 if case:
                     new_cases.append(case)
             self.add_cases_to_table(new_cases)
+            
+            # 如果导入了新的案例集，通知主窗口刷新历史记录界面的下拉框
+            if collection_name and self.collection_imported:
+                self.collection_imported()
             
             # 打印结果
             print(f"导入成功：已导入 {success_count}/{total_count} 条测试用例")

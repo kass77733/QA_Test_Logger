@@ -345,12 +345,7 @@ class HistoryTab(QWidget):
         # 案例集筛选
         filter_layout.addWidget(QLabel("案例集:"))
         self.collection_combo = QComboBox()
-        self.collection_combo.addItem("全部")
-        try:
-            for name in self.db.get_all_collection_names():
-                self.collection_combo.addItem(name)
-        except Exception:
-            pass
+        self.refresh_collection_combo()
         filter_layout.addWidget(self.collection_combo)
 
         # 搜索框（支持ID和测试场景）
@@ -364,6 +359,11 @@ class HistoryTab(QWidget):
         self.search_button = QPushButton("查询")
         self.search_button.clicked.connect(self.search_records)
         filter_layout.addWidget(self.search_button)
+        
+        # 刷新案例集按钮
+        self.refresh_button = QPushButton("刷新案例集")
+        self.refresh_button.clicked.connect(self.refresh_collection_combo)
+        filter_layout.addWidget(self.refresh_button)
         
         self.layout.addWidget(filter_group)
         
@@ -440,6 +440,26 @@ class HistoryTab(QWidget):
         
         # 初始查询
         self.search_records()
+    
+    def refresh_collection_combo(self):
+        """刷新案例集下拉框"""
+        current_text = self.collection_combo.currentText() if self.collection_combo.count() > 0 else "全部"
+        
+        # 清空并重新加载
+        self.collection_combo.clear()
+        self.collection_combo.addItem("全部")
+        
+        try:
+            collection_names = self.db.get_all_collection_names()
+            for name in collection_names:
+                self.collection_combo.addItem(name)
+        except Exception:
+            pass
+        
+        # 尝试恢复之前的选择
+        index = self.collection_combo.findText(current_text)
+        if index >= 0:
+            self.collection_combo.setCurrentIndex(index)
     
     def search_records(self):
         """查询记录"""

@@ -39,7 +39,15 @@ class MainWindow(QMainWindow):
         self.history_tab = HistoryTab(self.db)
         self.tabs.addTab(self.history_tab, "历史记录")
         
+        # 建立标签页之间的通信：当导入新案例集时，通知历史记录界面刷新下拉框
+        self.cases_tab.collection_imported = self.on_collection_imported
+        
         self.setCentralWidget(self.tabs)
+    
+    def on_collection_imported(self):
+        """处理案例集导入事件"""
+        # 刷新历史记录界面的案例集下拉框
+        self.history_tab.refresh_collection_combo()
     
     def closeEvent(self, event):
         """窗口关闭事件"""
