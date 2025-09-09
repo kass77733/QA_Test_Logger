@@ -274,6 +274,10 @@ class Database:
             update_fields.append("executor = ?")
             params.append(executor)
         
+        # 总是更新时间戳为当前时间
+        update_fields.append("timestamp = ?")
+        params.append(int(datetime.now().timestamp()))
+        
         if update_fields:
             # 添加记录ID到参数列表
             params.append(record_id)
