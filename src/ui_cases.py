@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QTableWidget, QTableWidgetItem, QFileDialog, QSplitter,
-    QHeaderView, QMessageBox
+    QHeaderView, QMessageBox,QSizePolicy
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QBrush
@@ -67,9 +67,22 @@ class TestCasesTab(QWidget):
         self.cases_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.cases_table.itemClicked.connect(self.on_case_selected)
         splitter.addWidget(self.cases_table)
-        
-        # 右侧执行区域
+
+        # 左侧固定
+        self.cases_table.setFixedWidth(450)
+
+        # 右侧执行区固定宽度，并让内部控件自动换行
         self.execution_widget = TestCaseExecutionWidget(self.db)
+        self.execution_widget.setSizePolicy(
+            QSizePolicy.Policy.Expanding,  # 水平方向可扩展
+            QSizePolicy.Policy.Expanding  # 垂直方向可扩展
+        )
+
+        # 设置分割器
+        splitter.setStretchFactor(0, 0)  # 左侧固定
+        splitter.setStretchFactor(1, 0)  # 右侧固定
+
+
         # 连接记录保存信号
         self.execution_widget.record_saved.connect(self.on_record_saved)
         splitter.addWidget(self.execution_widget)

@@ -1,8 +1,8 @@
 import os
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QComboBox, QTextEdit, QLineEdit, QGroupBox, QMessageBox,
-    QFileDialog
+    QFileDialog, QSizePolicy, QScrollArea
 )
 from PyQt6.QtCore import pyqtSignal, QTimer
 
@@ -29,11 +29,14 @@ class TestCaseExecutionWidget(QWidget):
         # 测试用例信息区域
         case_info_group = QGroupBox("测试用例信息")
         case_info_layout = QVBoxLayout(case_info_group)
-        
+
+
         # 测试场景
         scenario_layout = QHBoxLayout()
         scenario_layout.addWidget(QLabel("测试场景:"))
         self.scenario_label = QLabel()
+        self.scenario_label.setWordWrap(True)  # ✅ 自动换行
+        self.scenario_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)  # ✅ 占满父容器宽度
         scenario_layout.addWidget(self.scenario_label)
         case_info_layout.addLayout(scenario_layout)
 
@@ -41,6 +44,8 @@ class TestCaseExecutionWidget(QWidget):
         collection_layout = QHBoxLayout()
         collection_layout.addWidget(QLabel("案例集名称:"))
         self.collection_label = QLabel()
+        self.collection_label.setWordWrap(True)
+        self.collection_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)  # ✅ 占满父容器宽度
         collection_layout.addWidget(self.collection_label)
         case_info_layout.addLayout(collection_layout)
         
@@ -48,6 +53,8 @@ class TestCaseExecutionWidget(QWidget):
         precondition_layout = QHBoxLayout()
         precondition_layout.addWidget(QLabel("测试步骤:"))
         self.precondition_label = QLabel()
+        self.precondition_label.setWordWrap(True)
+        self.precondition_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)  # ✅ 占满父容器宽度
         precondition_layout.addWidget(self.precondition_label)
         case_info_layout.addLayout(precondition_layout)
         
@@ -55,6 +62,8 @@ class TestCaseExecutionWidget(QWidget):
         expected_layout = QHBoxLayout()
         expected_layout.addWidget(QLabel("预期结果:"))
         self.expected_label = QLabel()
+        self.expected_label.setWordWrap(True)
+        self.expected_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)  # ✅ 占满父容器宽度
         expected_layout.addWidget(self.expected_label)
         case_info_layout.addLayout(expected_layout)
         
@@ -62,10 +71,18 @@ class TestCaseExecutionWidget(QWidget):
         priority_layout = QHBoxLayout()
         priority_layout.addWidget(QLabel("优先级:"))
         self.priority_label = QLabel()
+        self.priority_label.setWordWrap(True)
+        self.priority_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)  # ✅ 占满父容器宽度
         priority_layout.addWidget(self.priority_label)
         case_info_layout.addLayout(priority_layout)
-        
-        self.layout.addWidget(case_info_group)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(case_info_group)  # ✅ 把 groupBox 放进去
+        # ✅ 设置 scroll 本身的最小高度和大小策略
+        scroll.setMinimumHeight(200)
+        scroll.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.layout.addWidget(scroll)
         
         # 执行结果区域
         execution_group = QGroupBox("执行结果")
