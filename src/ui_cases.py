@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QTableWidget, QTableWidgetItem, QFileDialog, QSplitter,
     QHeaderView, QMessageBox, QSizePolicy, QComboBox, QDialog,
-    QLineEdit, QFormLayout, QDialogButtonBox
+    QLineEdit, QFormLayout, QDialogButtonBox, QProgressDialog
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QBrush
@@ -284,6 +284,12 @@ class TestCasesTab(QWidget):
             # 刷新案例集下拉框（无论是新增还是更新）
             self.refresh_collection_combo()
             
+            # 自动切换到对应的案例集
+            if collection_name:
+                index = self.collection_combo.findText(collection_name)
+                if index >= 0:
+                    self.collection_combo.setCurrentIndex(index)
+            
             # 打印结果
             print(f"导入成功：已导入 {success_count}/{total_count} 条测试用例")
             
@@ -542,6 +548,16 @@ class TestCasesTab(QWidget):
             QMessageBox.warning(self, "警告", "请填写所有参数")
             return
         
+        # 显示加载提示
+        progress = QProgressDialog("正在从接口获取案例数据...", "取消", 0, 0, self)
+        progress.setWindowTitle("请稍候")
+        progress.setWindowModality(Qt.WindowModality.WindowModal)
+        progress.setAutoClose(False)
+        progress.setAutoReset(False)
+        progress.setMinimumWidth(300)
+        progress.setMinimumHeight(100)
+        progress.show()
+        
         try:
             # 发送GET请求
             url = "http://127.0.0.1/testarGetCase"
@@ -549,7 +565,11 @@ class TestCasesTab(QWidget):
                 'projectId': params['project_id'],
                 'subtaskName': params['subtask_name'],
                 'round': params['round']
-            }, timeout=10)
+            }, timeout=60)
+            
+            # 检查是否被取消
+            if progress.wasCanceled():
+                return
             
             if response.status_code != 200:
                 QMessageBox.critical(self, "错误", f"API请求失败: HTTP {response.status_code}")
@@ -636,6 +656,12 @@ class TestCasesTab(QWidget):
             # 刷新案例集下拉框（无论是新增还是更新）
             self.refresh_collection_combo()
             
+            # 自动切换到对应的案例集
+            if collection_name:
+                index = self.collection_combo.findText(collection_name)
+                if index >= 0:
+                    self.collection_combo.setCurrentIndex(index)
+            
             # 显示结果
             QMessageBox.information(
                 self, "成功", 
@@ -650,3 +676,6 @@ class TestCasesTab(QWidget):
             QMessageBox.critical(self, "数据错误", f"JSON解析失败: {str(e)}")
         except Exception as e:
             QMessageBox.critical(self, "错误", f"从接口获取案例失败: {str(e)}")
+        finally:
+            # 关闭进度对话框
+            progress.close()
