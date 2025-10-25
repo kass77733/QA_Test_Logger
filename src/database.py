@@ -141,6 +141,7 @@ class Database:
         
         Args:
             cases_data: 包含测试用例数据的列表，每个元素是一个字典
+            case_collection_name: 可选的案例集名称
         
         Returns:
             tuple: (成功导入的数量, 总数量)
@@ -148,20 +149,27 @@ class Database:
         success_count = 0
         total_count = len(cases_data)
         
+        # 首先检查是否有已存在的案例，并获取其案例集名称
+        existing_collection_name = None
         for case in cases_data:
             try:
-                # 读取已存在的案例集名称，避免被空值覆盖
-                existing_name = None
-                try:
-                    self.cursor.execute('SELECT case_collection_name FROM test_cases WHERE case_id = ?', (case.get('用例ID', ''),))
-                    row = self.cursor.fetchone()
-                    if row:
-                        # row 可能是 Row 或 dict
-                        existing_name = row['case_collection_name'] if isinstance(row, sqlite3.Row) or isinstance(row, dict) else row[0]
-                except sqlite3.Error:
-                    existing_name = None
+                case_id = case.get('用例ID', '')
+                self.cursor.execute('SELECT case_collection_name FROM test_cases WHERE case_id = ?', (case_id,))
+                row = self.cursor.fetchone()
+                if row and row['case_collection_name']:
+                    existing_collection_name = row['case_collection_name']
+                    break
+            except sqlite3.Error:
+                continue
 
-                final_collection_name = (case.get('案例集名称') or case_collection_name or existing_name)
+        # 如果没有在参数中指定案例集名称，但找到了已存在案例的集名称，就使用已存在的
+        final_collection_name = case_collection_name or existing_collection_name
+        
+        for case in cases_data:
+            try:
+                # 如果案例中自带案例集名称，优先使用案例中的
+                case_specific_collection = case.get('案例集名称')
+                
                 self.cursor.execute('''
                 INSERT OR REPLACE INTO test_cases 
                 (case_id, scenario, test_steps, expected_result, priority, case_collection_name)
@@ -172,7 +180,7 @@ class Database:
                     (case.get('测试步骤') or case.get('前置条件') or ''),
                     case.get('预期结果', ''),
                     case.get('优先级', ''),
-                    final_collection_name
+                    case_specific_collection or final_collection_name  # 优先使用案例自带的集名称，其次使用统一的集名称
                 ))
                 success_count += 1
             except sqlite3.Error as e:
