@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QTableWidget, QTableWidgetItem, QFileDialog, QSplitter,
-    QHeaderView, QMessageBox,QSizePolicy
+    QHeaderView, QMessageBox, QSizePolicy, QComboBox
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QBrush
@@ -34,11 +34,20 @@ class TestCasesTab(QWidget):
         self.import_button.clicked.connect(self.import_excel)
         button_layout.addWidget(self.import_button)
         
-        # 刷新按钮
-        # self.refresh_button = QPushButton("刷新列表")
-        # self.refresh_button.clicked.connect(self.load_test_cases)
-        # button_layout.addWidget(self.refresh_button)
-
+        # 案例集选择下拉框
+        self.collection_label = QLabel("选择案例集:")
+        button_layout.addWidget(self.collection_label)
+        
+        self.collection_combo = QComboBox()
+        self.collection_combo.addItem("-- 请选择案例集 --")
+        self.collection_combo.currentTextChanged.connect(self.on_collection_selected)
+        button_layout.addWidget(self.collection_combo)
+        
+        # 删除测试集按钮
+        self.delete_collection_button = QPushButton("删除测试集")
+        self.delete_collection_button.clicked.connect(self.delete_collection)
+        button_layout.addWidget(self.delete_collection_button)
+        
         # 清空列表按钮（仅UI清空，不删除数据库）
         self.clear_button = QPushButton("清空列表")
         self.clear_button.clicked.connect(self.clear_cases_table)
@@ -47,13 +56,16 @@ class TestCasesTab(QWidget):
         button_layout.addStretch()
         self.layout.addLayout(button_layout)
         
+        # 加载案例集列表
+        self.refresh_collection_combo()
+        
         # 分割器
         splitter = QSplitter(Qt.Orientation.Horizontal)
         
         # 左侧用例列表
         self.cases_table = QTableWidget()
         self.cases_table.setColumnCount(5)
-        self.cases_table.setHorizontalHeaderLabels(["用例ID", "测试场景", "测试步骤", "预期结果", "优先级"])
+        self.cases_table.setHorizontalHeaderLabels(["用例ID", "测试场景", "测试步骤", "预期结果", "案例操作"])
         # 固定列宽，避免出现水平滚动条；刷新后保持
         header = self.cases_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
@@ -62,7 +74,7 @@ class TestCasesTab(QWidget):
         self.cases_table.setColumnWidth(1, 100)  # 测试场景
         self.cases_table.setColumnWidth(2, 100)  # 测试步骤
         self.cases_table.setColumnWidth(3, 100)  # 预期结果
-        self.cases_table.setColumnWidth(4, 80)   # 优先级
+        self.cases_table.setColumnWidth(4, 100)   # 案例操作
         self.cases_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.cases_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.cases_table.itemClicked.connect(self.on_case_selected)
@@ -119,7 +131,11 @@ class TestCasesTab(QWidget):
                 scenario_item = QTableWidgetItem(case['scenario'])
                 precondition_item = QTableWidgetItem((case.get('test_steps') or case.get('precondition') or ""))
                 expected_item = QTableWidgetItem(case['expected_result'])
-                priority_item = QTableWidgetItem(case['priority'] or "")
+                
+                # 创建删除按钮
+                delete_button = QPushButton("删除")
+                delete_button.clicked.connect(lambda checked, cid=case_id: self.delete_test_case(cid))
+                delete_button.setMaximumWidth(50)
                 
                 # 如果是已执行的测试用例，设置背景色
                 if case_id in executed_cases:
@@ -140,7 +156,6 @@ class TestCasesTab(QWidget):
                     scenario_item.setBackground(brush)
                     precondition_item.setBackground(brush)
                     expected_item.setBackground(brush)
-                    priority_item.setBackground(brush)
                     
                     # 存储最新记录ID，用于后续查询
                     id_item.setData(Qt.ItemDataRole.UserRole, records[case_id]['record_id'])
@@ -150,7 +165,7 @@ class TestCasesTab(QWidget):
                 self.cases_table.setItem(row, 1, scenario_item)
                 self.cases_table.setItem(row, 2, precondition_item)
                 self.cases_table.setItem(row, 3, expected_item)
-                self.cases_table.setItem(row, 4, priority_item)
+                self.cases_table.setCellWidget(row, 4, delete_button)
             
             # 不再自动调整列宽，保持固定设置
             
@@ -278,9 +293,9 @@ class TestCasesTab(QWidget):
                 else:  # 跳过
                     color = QColor(200, 200, 255)  # 浅蓝色
                 
-                # 设置所有列的背景色
+                # 设置所有列的背景色（跳过最后一列的删除按钮）
                 brush = QBrush(color)
-                for col in range(self.cases_table.columnCount()):
+                for col in range(self.cases_table.columnCount() - 1):  # 跳过最后一列
                     cell_item = self.cases_table.item(row, col)
                     if cell_item:
                         cell_item.setBackground(brush)
@@ -324,7 +339,11 @@ class TestCasesTab(QWidget):
             scenario_item = QTableWidgetItem(case['scenario'])
             precondition_item = QTableWidgetItem((case.get('test_steps') or case.get('precondition') or ""))
             expected_item = QTableWidgetItem(case['expected_result'])
-            priority_item = QTableWidgetItem(case['priority'] or "")
+            
+            # 创建删除按钮
+            delete_button = QPushButton("删除")
+            delete_button.clicked.connect(lambda checked, cid=case_id: self.delete_test_case(cid))
+            delete_button.setMaximumWidth(50)
 
             # 着色
             if case_id in executed_cases:
@@ -342,7 +361,6 @@ class TestCasesTab(QWidget):
                 scenario_item.setBackground(brush)
                 precondition_item.setBackground(brush)
                 expected_item.setBackground(brush)
-                priority_item.setBackground(brush)
                 # 记录最新记录ID，便于右侧反显结果
                 try:
                     if case_id in records and 'record_id' in records[case_id]:
@@ -354,4 +372,99 @@ class TestCasesTab(QWidget):
             self.cases_table.setItem(row, 1, scenario_item)
             self.cases_table.setItem(row, 2, precondition_item)
             self.cases_table.setItem(row, 3, expected_item)
-            self.cases_table.setItem(row, 4, priority_item)
+            self.cases_table.setCellWidget(row, 4, delete_button)
+    
+    def refresh_collection_combo(self):
+        """刷新案例集下拉框"""
+        current_text = self.collection_combo.currentText()
+        self.collection_combo.clear()
+        self.collection_combo.addItem("-- 请选择案例集 --")
+        
+        collections = self.db.get_all_collection_names()
+        for collection in collections:
+            self.collection_combo.addItem(collection)
+        
+        # 尝试恢复之前的选择
+        index = self.collection_combo.findText(current_text)
+        if index >= 0:
+            self.collection_combo.setCurrentIndex(index)
+    
+    def on_collection_selected(self, collection_name):
+        """处理案例集选择事件"""
+        if collection_name == "-- 请选择案例集 --" or not collection_name:
+            return
+        
+        try:
+            # 获取指定案例集的所有用例
+            cases = self.db.get_cases_by_collection(collection_name)
+            
+            # 清空表格
+            self.cases_table.setRowCount(0)
+            
+            # 添加用例到表格
+            self.add_cases_to_table(cases)
+            
+            print(f"已加载案例集 '{collection_name}' 中的 {len(cases)} 个测试用例")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"加载案例集失败: {str(e)}")
+    
+    def delete_test_case(self, case_id):
+        """删除测试用例"""
+        reply = QMessageBox.question(
+            self, "确认删除", 
+            f"确定要删除测试用例 '{case_id}' 吗？\n\n注意：这将同时删除该用例的所有执行记录！",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # 从数据库删除用例
+                self.db.delete_test_case(case_id)
+                
+                # 从表格中移除
+                for row in range(self.cases_table.rowCount()):
+                    item = self.cases_table.item(row, 0)
+                    if item and item.text() == case_id:
+                        self.cases_table.removeRow(row)
+                        break
+                
+                print(f"已删除测试用例: {case_id}")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "错误", f"删除测试用例失败: {str(e)}")
+    
+    def delete_collection(self):
+        """删除测试集"""
+        current_collection = self.collection_combo.currentText()
+        if current_collection == "-- 请选择案例集 --" or not current_collection:
+            QMessageBox.warning(self, "警告", "请先选择要删除的测试集")
+            return
+        
+        reply = QMessageBox.question(
+            self, "确认删除", 
+            f"确定要删除整个测试集 '{current_collection}' 吗？\n\n注意：这将删除该测试集中的所有用例及其执行记录！",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # 从数据库删除整个测试集
+                self.db.delete_collection(current_collection)
+                
+                # 清空表格
+                self.cases_table.setRowCount(0)
+                
+                # 刷新下拉框
+                self.refresh_collection_combo()
+                
+                # 通知主窗口刷新历史记录界面
+                if self.collection_imported:
+                    self.collection_imported()
+                
+                print(f"已删除测试集: {current_collection}")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "错误", f"删除测试集失败: {str(e)}")

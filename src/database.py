@@ -484,6 +484,66 @@ class Database:
         
         return result
     
+    def get_cases_by_collection(self, collection_name):
+        """获取指定案例集的所有测试用例"""
+        self.cursor.execute('SELECT * FROM test_cases WHERE case_collection_name = ?', (collection_name,))
+        rows = self.cursor.fetchall()
+        normalized = []
+        for row in rows:
+            row_dict = dict(row)
+            # 兼容：优先使用 test_steps，其次使用 precondition
+            row_dict['test_steps'] = row_dict.get('test_steps') or row_dict.get('precondition') or None
+            normalized.append(row_dict)
+        return normalized
+    
+    def delete_test_case(self, case_id):
+        """
+        删除测试用例及其所有相关记录
+        
+        Args:
+            case_id: 要删除的测试用例ID
+        """
+        try:
+            # 获取所有相关的测试记录ID
+            self.cursor.execute('SELECT record_id FROM test_records WHERE case_id = ?', (case_id,))
+            record_ids = [row['record_id'] for row in self.cursor.fetchall()]
+            
+            # 删除所有相关的图片记录
+            for record_id in record_ids:
+                self.cursor.execute('DELETE FROM record_images WHERE record_id = ?', (record_id,))
+            
+            # 删除所有相关的测试记录
+            self.cursor.execute('DELETE FROM test_records WHERE case_id = ?', (case_id,))
+            
+            # 删除测试用例
+            self.cursor.execute('DELETE FROM test_cases WHERE case_id = ?', (case_id,))
+            
+            self.conn.commit()
+            
+        except sqlite3.Error as e:
+            self.conn.rollback()
+            raise Exception(f"删除测试用例失败: {str(e)}")
+    
+    def delete_collection(self, collection_name):
+        """
+        删除整个测试集及其所有相关记录
+        
+        Args:
+            collection_name: 要删除的案例集名称
+        """
+        try:
+            # 获取该案例集中的所有用例ID
+            self.cursor.execute('SELECT case_id FROM test_cases WHERE case_collection_name = ?', (collection_name,))
+            case_ids = [row['case_id'] for row in self.cursor.fetchall()]
+            
+            # 删除每个用例及其相关记录
+            for case_id in case_ids:
+                self.delete_test_case(case_id)
+            
+        except sqlite3.Error as e:
+            self.conn.rollback()
+            raise Exception(f"删除测试集失败: {str(e)}")
+    
     def export_test_records(self, start_date=None, end_date=None, case_id=None, status=None, collection_name=None, search_text=None):
         """
         导出测试记录数据
