@@ -1,15 +1,56 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
     QTableWidget, QTableWidgetItem, QFileDialog, QSplitter,
-    QHeaderView, QMessageBox, QSizePolicy, QComboBox
+    QHeaderView, QMessageBox, QSizePolicy, QComboBox, QDialog,
+    QLineEdit, QFormLayout, QDialogButtonBox
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QBrush
+import requests
+import json
 
 from ui_execution import TestCaseExecutionWidget
 from excel_parser import ExcelParser
 from PyQt6.QtWidgets import QInputDialog, QPushButton
 from utils import SettingsUtils
+
+
+class ApiImportDialog(QDialog):
+    """接口获取案例参数输入对话框"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("接口获取案例")
+        self.setModal(True)
+        self.resize(300, 150)
+        
+        # 创建表单布局
+        layout = QFormLayout(self)
+        
+        # 输入框
+        self.project_id_edit = QLineEdit()
+        self.subtask_name_edit = QLineEdit()
+        self.round_edit = QLineEdit()
+        
+        layout.addRow("项目编号:", self.project_id_edit)
+        layout.addRow("子任务名称:", self.subtask_name_edit)
+        layout.addRow("轮次:", self.round_edit)
+        
+        # 按钮
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(self.accept)
+        button_box.rejected.connect(self.reject)
+        layout.addRow(button_box)
+    
+    def get_params(self):
+        """获取输入的参数"""
+        return {
+            'project_id': self.project_id_edit.text().strip(),
+            'subtask_name': self.subtask_name_edit.text().strip(),
+            'round': self.round_edit.text().strip()
+        }
 
 
 class TestCasesTab(QWidget):
@@ -33,6 +74,11 @@ class TestCasesTab(QWidget):
         self.import_button = QPushButton("导入Excel")
         self.import_button.clicked.connect(self.import_excel)
         button_layout.addWidget(self.import_button)
+        
+        # 接口获取案例按钮
+        self.api_import_button = QPushButton("接口获取案例")
+        self.api_import_button.clicked.connect(self.import_from_api)
+        button_layout.addWidget(self.api_import_button)
         
         # 案例集选择下拉框
         self.collection_label = QLabel("选择案例集:")
@@ -468,3 +514,116 @@ class TestCasesTab(QWidget):
                 
             except Exception as e:
                 QMessageBox.critical(self, "错误", f"删除测试集失败: {str(e)}")
+    
+    def import_from_api(self):
+        """从接口获取案例"""
+        # 显示参数输入对话框
+        dialog = ApiImportDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        
+        params = dialog.get_params()
+        
+        # 验证参数
+        if not all(params.values()):
+            QMessageBox.warning(self, "警告", "请填写所有参数")
+            return
+        
+        try:
+            # 发送GET请求
+            url = "http://127.0.0.1/testarGetCase"
+            response = requests.get(url, params={
+                'projectId': params['project_id'],
+                'subtaskName': params['subtask_name'],
+                'round': params['round']
+            }, timeout=10)
+            
+            if response.status_code != 200:
+                QMessageBox.critical(self, "错误", f"API请求失败: HTTP {response.status_code}")
+                return
+            
+            # 解析响应
+            data = response.json()
+            
+            if data.get('status') != 200:
+                QMessageBox.critical(self, "错误", f"API返回错误: {data.get('message', '未知错误')}")
+                return
+            
+            cases_data = data.get('data', [])
+            if not cases_data:
+                QMessageBox.information(self, "提示", "未获取到任何案例数据")
+                return
+            
+            # 转换数据格式为与Excel导入一致的格式
+            converted_cases = []
+            for case in cases_data:
+                converted_case = {
+                    '用例ID': case.get('case_id', ''),
+                    '测试场景': case.get('caseName', ''),
+                    '测试步骤': case.get('test_steps', ''),
+                    '预期结果': case.get('expected_result', ''),
+                    '优先级': case.get('priority', '')
+                }
+                converted_cases.append(converted_case)
+            
+            # 判断是否首次导入
+            existing = self.db.get_all_test_cases()
+            existing_ids = set([row['case_id'] for row in existing])
+            new_case_ids = [c.get('用例ID', '') for c in converted_cases if c.get('用例ID')]
+            is_first_import = all(cid not in existing_ids for cid in new_case_ids) and len(new_case_ids) > 0
+            
+            collection_name = None
+            if is_first_import:
+                # 生成默认案例集名称
+                collection_name = f"{params['project_id']}_{params['subtask_name']}_{params['round']}"
+                
+                # 询问用户是否修改案例集名称
+                text, ok = QInputDialog.getText(
+                    self, "案例集名称", 
+                    f"请确认或修改案例集名称：", 
+                    text=collection_name
+                )
+                if not ok:
+                    return
+                collection_name = text.strip() or collection_name
+                
+                # 为每个用例添加案例集名称
+                for c in converted_cases:
+                    c['案例集名称'] = collection_name
+                
+                # 记录最近一次导入的集合名
+                SettingsUtils.set_last_collection_name(collection_name)
+            
+            # 导入数据库
+            success_count, total_count = self.db.import_test_cases(converted_cases, collection_name)
+            
+            # 将本次导入的用例追加到当前表格
+            imported_ids = [c.get('用例ID') for c in converted_cases if c.get('用例ID')]
+            new_cases = []
+            for cid in imported_ids:
+                case = self.db.get_test_case(cid)
+                if case:
+                    new_cases.append(case)
+            self.add_cases_to_table(new_cases)
+            
+            # 如果导入了新的案例集，通知主窗口刷新历史记录界面的下拉框
+            if collection_name and self.collection_imported:
+                self.collection_imported()
+            
+            # 刷新案例集下拉框
+            self.refresh_collection_combo()
+            
+            # 显示结果
+            QMessageBox.information(
+                self, "成功", 
+                f"从接口获取成功！\n\n已导入 {success_count}/{total_count} 条测试用例"
+            )
+            
+            print(f"从接口导入成功：已导入 {success_count}/{total_count} 条测试用例")
+            
+        except requests.exceptions.RequestException as e:
+            QMessageBox.critical(self, "网络错误", f"请求失败: {str(e)}")
+        except json.JSONDecodeError as e:
+            QMessageBox.critical(self, "数据错误", f"JSON解析失败: {str(e)}")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"从接口获取案例失败: {str(e)}")
