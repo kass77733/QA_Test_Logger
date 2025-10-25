@@ -1,12 +1,53 @@
 import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, 
-    QListWidget, QListWidgetItem, QFrame
+    QListWidget, QListWidgetItem, QFrame, QDialog, QScrollArea
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QPixmap, QIcon
 
 from utils import ImageUtils
+
+
+class ImageViewerDialog(QDialog):
+    """图片查看器对话框"""
+    
+    def __init__(self, image_path, parent=None):
+        super().__init__(parent)
+        self.image_path = image_path
+        self.setWindowTitle("图片查看器")
+        self.setModal(True)
+        self.resize(800, 600)
+        self.initUI()
+    
+    def initUI(self):
+        """初始化UI"""
+        layout = QVBoxLayout(self)
+        
+        # 创建滚动区域
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 图片标签
+        self.image_label = QLabel()
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        # 加载图片
+        if self.image_path and os.path.exists(self.image_path):
+            pixmap = QPixmap(self.image_path)
+            self.image_label.setPixmap(pixmap)
+            self.image_label.resize(pixmap.size())
+        else:
+            self.image_label.setText("图片不存在")
+        
+        scroll_area.setWidget(self.image_label)
+        layout.addWidget(scroll_area)
+        
+        # 关闭按钮
+        close_button = QPushButton("关闭")
+        close_button.clicked.connect(self.accept)
+        layout.addWidget(close_button)
 
 
 class NotificationWidget(QFrame):
@@ -143,6 +184,7 @@ class ImageListWidget(QWidget):
         self.image_list.setIconSize(QSize(100, 100))
         self.image_list.setMaximumHeight(150)
         self.image_list.itemClicked.connect(self.onImageClicked)
+        self.image_list.itemDoubleClicked.connect(self.onImageDoubleClicked)
         self.layout.addWidget(self.image_list)
         
         # 按钮布局
@@ -235,6 +277,15 @@ class ImageListWidget(QWidget):
         else:
             self.preview_label.setText("图片不存在")
             self.delete_button.setEnabled(False)
+    
+    def onImageDoubleClicked(self, item):
+        """处理图片双击事件，放大查看"""
+        image_path = item.data(Qt.ItemDataRole.UserRole)
+        
+        if image_path and os.path.exists(image_path):
+            # 打开图片查看器
+            viewer = ImageViewerDialog(image_path, self)
+            viewer.exec()
     
     def deleteSelectedImage(self):
         """删除选中的图片"""

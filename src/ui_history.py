@@ -326,7 +326,7 @@ class HistoryTab(QWidget):
         filter_layout.addWidget(QLabel("开始日期:"))
         self.start_date = QDateEdit()
         self.start_date.setCalendarPopup(True)
-        self.start_date.setDate(QDate.currentDate().addDays(-30))
+        self.start_date.setDate(QDate.currentDate())
         filter_layout.addWidget(self.start_date)
         
         # 结束日期
