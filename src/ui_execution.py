@@ -30,6 +30,14 @@ class TestCaseExecutionWidget(QWidget):
         case_info_group = QGroupBox("测试用例信息")
         case_info_layout = QVBoxLayout(case_info_group)
 
+        # 测试ID
+        case_id_layout = QHBoxLayout()
+        case_id_layout.addWidget(QLabel("测试ID:"))
+        self.case_id_label = QLabel()
+        self.case_id_label.setWordWrap(True)
+        self.case_id_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        case_id_layout.addWidget(self.case_id_label)
+        case_info_layout.addLayout(case_id_layout)
 
         # 测试场景
         scenario_layout = QHBoxLayout()
@@ -139,6 +147,7 @@ class TestCaseExecutionWidget(QWidget):
         self.current_record = None
         
         # 更新UI
+        self.case_id_label.setText(case['case_id'])
         self.scenario_label.setText(case['scenario'])
         self.collection_label.setText(case.get('case_collection_name') or "无")
         self.precondition_label.setText((case.get('test_steps') or case.get('precondition') or "无"))
