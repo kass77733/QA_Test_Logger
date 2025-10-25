@@ -236,24 +236,34 @@ class TestCasesTab(QWidget):
             # 解析Excel文件
             cases_data = ExcelParser.parse_excel(file_path)
 
-            # 判断是否首次导入（基于这些用例ID是否存在）
+            # 检查导入的案例情况
             existing = self.db.get_all_test_cases()
             existing_ids = set([row['case_id'] for row in existing])
             new_case_ids = [c.get('用例ID', '') for c in cases_data if c.get('用例ID')]
-            is_first_import = all(cid not in existing_ids for cid in new_case_ids) and len(new_case_ids) > 0
-
+            existing_case_ids = [cid for cid in new_case_ids if cid in existing_ids]
+            new_only_case_ids = [cid for cid in new_case_ids if cid not in existing_ids]
+            
             collection_name = None
-            if is_first_import:
-                # 询问案例集名称
+            
+            # 如果有已存在的案例，获取其案例集名称
+            if existing_case_ids:
+                existing_case = self.db.get_test_case(existing_case_ids[0])
+                if existing_case and existing_case.get('case_collection_name'):
+                    collection_name = existing_case['case_collection_name']
+            
+            # 如果没有已存在的案例集名称，且有新案例，才询问用户
+            if not collection_name and new_only_case_ids:
                 text, ok = QInputDialog.getText(self, "案例集名称", "请输入本次导入的案例集名称：")
                 if not ok:
                     return
                 collection_name = text.strip() or None
-                # 同时写入到每条用例的字段（以便导出与外部使用），数据库导入时也会使用此名称
-                for c in cases_data:
-                    c['案例集名称'] = collection_name
                 # 记录最近一次导入的集合名
                 SettingsUtils.set_last_collection_name(collection_name)
+            
+            # 为所有案例设置案例集名称
+            if collection_name:
+                for c in cases_data:
+                    c['案例集名称'] = collection_name
             
             # 导入数据库（传入collection_name以防Excel未写入对应列）
             success_count, total_count = self.db.import_test_cases(cases_data, collection_name)
@@ -270,6 +280,9 @@ class TestCasesTab(QWidget):
             # 如果导入了新的案例集，通知主窗口刷新历史记录界面的下拉框
             if collection_name and self.collection_imported:
                 self.collection_imported()
+            
+            # 刷新案例集下拉框（无论是新增还是更新）
+            self.refresh_collection_combo()
             
             # 打印结果
             print(f"导入成功：已导入 {success_count}/{total_count} 条测试用例")
@@ -566,14 +579,23 @@ class TestCasesTab(QWidget):
                 }
                 converted_cases.append(converted_case)
             
-            # 判断是否首次导入
+            # 检查导入的案例情况
             existing = self.db.get_all_test_cases()
             existing_ids = set([row['case_id'] for row in existing])
             new_case_ids = [c.get('用例ID', '') for c in converted_cases if c.get('用例ID')]
-            is_first_import = all(cid not in existing_ids for cid in new_case_ids) and len(new_case_ids) > 0
+            existing_case_ids = [cid for cid in new_case_ids if cid in existing_ids]
+            new_only_case_ids = [cid for cid in new_case_ids if cid not in existing_ids]
             
             collection_name = None
-            if is_first_import:
+            
+            # 如果有已存在的案例，获取其案例集名称
+            if existing_case_ids:
+                existing_case = self.db.get_test_case(existing_case_ids[0])
+                if existing_case and existing_case.get('case_collection_name'):
+                    collection_name = existing_case['case_collection_name']
+            
+            # 如果没有已存在的案例集名称，且有新案例，才询问用户
+            if not collection_name and new_only_case_ids:
                 # 生成默认案例集名称
                 collection_name = f"{params['project_id']}_{params['subtask_name']}_{params['round']}"
                 
@@ -587,12 +609,13 @@ class TestCasesTab(QWidget):
                     return
                 collection_name = text.strip() or collection_name
                 
-                # 为每个用例添加案例集名称
-                for c in converted_cases:
-                    c['案例集名称'] = collection_name
-                
                 # 记录最近一次导入的集合名
                 SettingsUtils.set_last_collection_name(collection_name)
+            
+            # 为所有案例设置案例集名称
+            if collection_name:
+                for c in converted_cases:
+                    c['案例集名称'] = collection_name
             
             # 导入数据库
             success_count, total_count = self.db.import_test_cases(converted_cases, collection_name)
@@ -610,7 +633,7 @@ class TestCasesTab(QWidget):
             if collection_name and self.collection_imported:
                 self.collection_imported()
             
-            # 刷新案例集下拉框
+            # 刷新案例集下拉框（无论是新增还是更新）
             self.refresh_collection_combo()
             
             # 显示结果
