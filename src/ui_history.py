@@ -48,6 +48,7 @@ class ExportThread(QThread):
                 self.filters.get('end_date'),
                 self.filters.get('case_id'),
                 self.filters.get('status'),
+                self.filters.get('project_id'),
                 self.filters.get('collection_name'),
                 self.filters.get('search_text')
             )
@@ -239,24 +240,24 @@ class ExportThread(QThread):
         export_dir = os.path.dirname(self.file_path)
         os.makedirs(export_dir, exist_ok=True)
         
-        # 创建图片目录
-        images_dir = os.path.join(export_dir, 'images')
-        os.makedirs(images_dir, exist_ok=True)
+        # # 创建图片目录
+        # images_dir = os.path.join(export_dir, 'images')
+        # os.makedirs(images_dir, exist_ok=True)
         
         # 准备数据
         export_data = []
         for record in records:
-            # 复制图片
-            image_refs = []
-            if 'images' in record and record['images']:
-                for img_path in record['images']:
-                    if img_path and os.path.exists(img_path):
-                        # 复制图片到导出目录
-                        img_name = os.path.basename(img_path)
-                        export_img_path = os.path.join(images_dir, img_name)
-                        shutil.copy2(img_path, export_img_path)
-                        # 添加相对路径引用
-                        image_refs.append(f"images/{img_name}")
+            # # 复制图片
+            # image_refs = []
+            # if 'images' in record and record['images']:
+            #     for img_path in record['images']:
+            #         if img_path and os.path.exists(img_path):
+            #             # 复制图片到导出目录
+            #             img_name = os.path.basename(img_path)
+            #             export_img_path = os.path.join(images_dir, img_name)
+            #             shutil.copy2(img_path, export_img_path)
+            #             # 添加相对路径引用
+            #             image_refs.append(f"images/{img_name}")
             
             # 创建记录数据
             row_data = {
@@ -268,8 +269,8 @@ class ExportThread(QThread):
                 '执行状态': record['执行状态'],
                 '实际结果': record['实际结果'] or '',
                 '备注': record['备注'] or '',
-                '执行时间': DateUtils.timestamp_to_string(record['执行时间']),
-                '图片': ', '.join(image_refs)
+                '执行时间': DateUtils.timestamp_to_string(record['执行时间'])
+                # '图片': ', '.join(image_refs)
             }
             export_data.append(row_data)
             
@@ -336,6 +337,11 @@ class HistoryTab(QWidget):
         self.end_date.setDate(QDate.currentDate())
         filter_layout.addWidget(self.end_date)
         
+        # 项目ID筛选
+        filter_layout.addWidget(QLabel("项目ID:"))
+        self.project_combo = QComboBox()
+        filter_layout.addWidget(self.project_combo)
+        
         # 状态筛选
         filter_layout.addWidget(QLabel("状态:"))
         self.status_combo = QComboBox()
@@ -345,7 +351,6 @@ class HistoryTab(QWidget):
         # 案例集筛选
         filter_layout.addWidget(QLabel("案例集:"))
         self.collection_combo = QComboBox()
-        self.refresh_collection_combo()
         filter_layout.addWidget(self.collection_combo)
 
         # 搜索框（支持ID和测试场景）
@@ -360,9 +365,9 @@ class HistoryTab(QWidget):
         self.search_button.clicked.connect(self.search_records)
         filter_layout.addWidget(self.search_button)
         
-        # 刷新案例集按钮
-        self.refresh_button = QPushButton("刷新案例集")
-        self.refresh_button.clicked.connect(self.refresh_collection_combo)
+        # 刷新按钮
+        self.refresh_button = QPushButton("刷新")
+        self.refresh_button.clicked.connect(self.refresh_filters)
         filter_layout.addWidget(self.refresh_button)
         
         self.layout.addWidget(filter_group)
@@ -438,10 +443,37 @@ class HistoryTab(QWidget):
         
         self.layout.addLayout(export_layout)
         
+        # 初始化筛选条件
+        self.refresh_project_combo()
+        self.refresh_collection_combo()
+        
+        # 连接项目ID选择事件（在所有控件创建完成后）
+        self.project_combo.currentTextChanged.connect(self.on_project_selected)
+        
         # 初始查询
         self.search_records()
     
-    def refresh_collection_combo(self):
+    def refresh_project_combo(self):
+        """刷新项目ID下拉框"""
+        current_text = self.project_combo.currentText() if self.project_combo.count() > 0 else "全部"
+        
+        # 清空并重新加载
+        self.project_combo.clear()
+        self.project_combo.addItem("全部")
+        
+        try:
+            project_ids = self.db.get_all_project_ids()
+            for project_id in project_ids:
+                self.project_combo.addItem(project_id)
+        except Exception:
+            pass
+        
+        # 尝试恢复之前的选择
+        index = self.project_combo.findText(current_text)
+        if index >= 0:
+            self.project_combo.setCurrentIndex(index)
+    
+    def refresh_collection_combo(self, project_id=None):
         """刷新案例集下拉框"""
         current_text = self.collection_combo.currentText() if self.collection_combo.count() > 0 else "全部"
         
@@ -450,7 +482,10 @@ class HistoryTab(QWidget):
         self.collection_combo.addItem("全部")
         
         try:
-            collection_names = self.db.get_all_collection_names()
+            if project_id and project_id != "全部":
+                collection_names = self.db.get_collections_by_project(project_id)
+            else:
+                collection_names = self.db.get_all_collection_names()
             for name in collection_names:
                 self.collection_combo.addItem(name)
         except Exception:
@@ -460,6 +495,16 @@ class HistoryTab(QWidget):
         index = self.collection_combo.findText(current_text)
         if index >= 0:
             self.collection_combo.setCurrentIndex(index)
+    
+    def refresh_filters(self):
+        """刷新所有筛选条件"""
+        self.refresh_project_combo()
+        self.refresh_collection_combo()
+    
+    def on_project_selected(self, project_id):
+        """处理项目ID选择事件"""
+        # 刷新案例集下拉框
+        self.refresh_collection_combo(project_id)
     
     def search_records(self):
         """查询记录"""
@@ -475,8 +520,13 @@ class HistoryTab(QWidget):
             # 获取搜索关键字
             search_text = self.search_edit.text().strip()
             
-            # 查询记录（先查全库后按案例集过滤）
+            # 查询记录（先查全库后按项目ID和案例集过滤）
             records = self.db.get_test_records(None, status, start_date, end_date)
+            
+            # 如果选择了项目ID，按项目ID过滤
+            selected_project = self.project_combo.currentText()
+            if selected_project and selected_project != "全部":
+                records = [r for r in records if r['case_id'].startswith(selected_project)]
             
             # 如果选择了案例集，按案例集过滤
             selected_collection = self.collection_combo.currentText()
@@ -566,6 +616,7 @@ class HistoryTab(QWidget):
             'end_date': DateUtils.string_to_timestamp(self.end_date.date().addDays(1).toString("yyyy-MM-dd")),
             'case_id': None,  # 与历史界面一致：搜索框可输入用例ID或场景，下方用search_text处理
             'status': self.status_combo.currentText() if self.status_combo.currentText() != "全部" else None,
+            'project_id': (self.project_combo.currentText() if self.project_combo.currentText() != "全部" else None),
             'collection_name': (self.collection_combo.currentText() if self.collection_combo.currentText() != "全部" else None),
             'search_text': (self.search_edit.text().strip() or None)
         }
@@ -605,6 +656,7 @@ class HistoryTab(QWidget):
             'end_date': DateUtils.string_to_timestamp(self.end_date.date().addDays(1).toString("yyyy-MM-dd")),
             'case_id': None,
             'status': self.status_combo.currentText() if self.status_combo.currentText() != "全部" else None,
+            'project_id': (self.project_combo.currentText() if self.project_combo.currentText() != "全部" else None),
             'collection_name': (self.collection_combo.currentText() if self.collection_combo.currentText() != "全部" else None),
             'search_text': (self.search_edit.text().strip() or None)
         }

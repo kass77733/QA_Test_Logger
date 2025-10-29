@@ -152,7 +152,6 @@ class TestCaseExecutionWidget(QWidget):
             return
         
         self.current_case = case
-        self.current_record = None
         
         # 更新UI
         self.case_id_label.setText(case['case_id'])
@@ -162,7 +161,20 @@ class TestCaseExecutionWidget(QWidget):
         self.expected_label.setText(case['expected_result'])
         self.priority_label.setText(case['priority'] or "无")
         
-        # 清空执行结果
+        # 检查是否有最新的执行记录
+        try:
+            latest_records = self.db.get_latest_records()
+            if case['case_id'] in latest_records:
+                # 加载最新记录
+                latest_record = self.db.get_test_record(latest_records[case['case_id']]['record_id'])
+                if latest_record:
+                    self.load_record(latest_record)
+                    return
+        except Exception as e:
+            print(f"获取最新记录失败: {str(e)}")
+        
+        # 如果没有最新记录，清空执行结果
+        self.current_record = None
         self.status_combo.setCurrentIndex(0)
         self.executor_edit.setText("")
         self.actual_result_edit.setText("")

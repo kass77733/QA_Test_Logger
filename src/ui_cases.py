@@ -80,12 +80,23 @@ class TestCasesTab(QWidget):
         self.api_import_button.clicked.connect(self.import_from_api)
         button_layout.addWidget(self.api_import_button)
         
+        # 项目ID选择下拉框
+        self.project_label = QLabel("选择项目ID:")
+        button_layout.addWidget(self.project_label)
+        
+        self.project_combo = QComboBox()
+        self.project_combo.addItem("-- 请选择项目ID --")
+        self.project_combo.setFixedWidth(150)
+        self.project_combo.currentTextChanged.connect(self.on_project_selected)
+        button_layout.addWidget(self.project_combo)
+        
         # 案例集选择下拉框
         self.collection_label = QLabel("选择案例集:")
         button_layout.addWidget(self.collection_label)
         
         self.collection_combo = QComboBox()
         self.collection_combo.addItem("-- 请选择案例集 --")
+        self.collection_combo.setFixedWidth(200)
         self.collection_combo.currentTextChanged.connect(self.on_collection_selected)
         button_layout.addWidget(self.collection_combo)
         
@@ -101,9 +112,6 @@ class TestCasesTab(QWidget):
         
         button_layout.addStretch()
         self.layout.addLayout(button_layout)
-        
-        # 加载案例集列表
-        self.refresh_collection_combo()
         
         # 分割器
         splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -149,6 +157,10 @@ class TestCasesTab(QWidget):
         splitter.setSizes([300, 500])
         
         self.layout.addWidget(splitter)
+        
+        # 在UI创建完成后加载数据
+        self.refresh_project_combo()
+        self.refresh_collection_combo()
     
     def load_test_cases(self):
         """加载测试用例列表"""
@@ -281,14 +293,24 @@ class TestCasesTab(QWidget):
             if collection_name and self.collection_imported:
                 self.collection_imported()
             
-            # 刷新案例集下拉框（无论是新增还是更新）
-            self.refresh_collection_combo()
+            # 刷新项目ID和案例集下拉框
+            self.refresh_project_combo()
             
-            # 自动切换到对应的案例集
-            if collection_name:
-                index = self.collection_combo.findText(collection_name)
-                if index >= 0:
-                    self.collection_combo.setCurrentIndex(index)
+            # 自动切换到对应的项目ID和案例集
+            if collection_name and new_case_ids:
+                # 获取项目ID（取第一个案例ID的前12位）
+                project_id = new_case_ids[0][:12] if new_case_ids[0] else ''
+                if project_id:
+                    # 先切换项目ID
+                    project_index = self.project_combo.findText(project_id)
+                    if project_index >= 0:
+                        self.project_combo.setCurrentIndex(project_index)
+                    
+                    # 再刷新和切换案例集
+                    self.refresh_collection_combo(project_id)
+                    collection_index = self.collection_combo.findText(collection_name)
+                    if collection_index >= 0:
+                        self.collection_combo.setCurrentIndex(collection_index)
             
             # 打印结果
             print(f"导入成功：已导入 {success_count}/{total_count} 条测试用例")
@@ -439,13 +461,32 @@ class TestCasesTab(QWidget):
             self.cases_table.setItem(row, 3, expected_item)
             self.cases_table.setCellWidget(row, 4, delete_button)
     
-    def refresh_collection_combo(self):
+    def refresh_project_combo(self):
+        """刷新项目ID下拉框"""
+        current_text = self.project_combo.currentText()
+        self.project_combo.clear()
+        self.project_combo.addItem("-- 请选择项目ID --")
+        
+        project_ids = self.db.get_all_project_ids()
+        for project_id in project_ids:
+            self.project_combo.addItem(project_id)
+        
+        # 尝试恢复之前的选择
+        index = self.project_combo.findText(current_text)
+        if index >= 0:
+            self.project_combo.setCurrentIndex(index)
+    
+    def refresh_collection_combo(self, project_id=None):
         """刷新案例集下拉框"""
         current_text = self.collection_combo.currentText()
         self.collection_combo.clear()
         self.collection_combo.addItem("-- 请选择案例集 --")
         
-        collections = self.db.get_all_collection_names()
+        if project_id and project_id != "-- 请选择项目ID --":
+            collections = self.db.get_collections_by_project(project_id)
+        else:
+            collections = self.db.get_all_collection_names()
+        
         for collection in collections:
             self.collection_combo.addItem(collection)
         
@@ -453,6 +494,14 @@ class TestCasesTab(QWidget):
         index = self.collection_combo.findText(current_text)
         if index >= 0:
             self.collection_combo.setCurrentIndex(index)
+    
+    def on_project_selected(self, project_id):
+        """处理项目ID选择事件"""
+        # 清空案例列表
+        self.cases_table.setRowCount(0)
+        
+        # 刷新案例集下拉框
+        self.refresh_collection_combo(project_id)
     
     def on_collection_selected(self, collection_name):
         """处理案例集选择事件"""
@@ -653,14 +702,24 @@ class TestCasesTab(QWidget):
             if collection_name and self.collection_imported:
                 self.collection_imported()
             
-            # 刷新案例集下拉框（无论是新增还是更新）
-            self.refresh_collection_combo()
+            # 刷新项目ID和案例集下拉框
+            self.refresh_project_combo()
             
-            # 自动切换到对应的案例集
-            if collection_name:
-                index = self.collection_combo.findText(collection_name)
-                if index >= 0:
-                    self.collection_combo.setCurrentIndex(index)
+            # 自动切换到对应的项目ID和案例集
+            if collection_name and new_case_ids:
+                # 获取项目ID（取第一个案例ID的前12位）
+                project_id = new_case_ids[0][:12] if new_case_ids[0] else ''
+                if project_id:
+                    # 先切换项目ID
+                    project_index = self.project_combo.findText(project_id)
+                    if project_index >= 0:
+                        self.project_combo.setCurrentIndex(project_index)
+                    
+                    # 再刷新和切换案例集
+                    self.refresh_collection_combo(project_id)
+                    collection_index = self.collection_combo.findText(collection_name)
+                    if collection_index >= 0:
+                        self.collection_combo.setCurrentIndex(collection_index)
             
             # 显示结果
             QMessageBox.information(
