@@ -111,23 +111,23 @@ class TestCasesTab(QWidget):
         # 左侧用例列表
         self.cases_table = QTableWidget()
         self.cases_table.setColumnCount(5)
-        self.cases_table.setHorizontalHeaderLabels(["用例ID", "测试场景", "测试步骤", "预期结果", "案例操作"])
+        self.cases_table.setHorizontalHeaderLabels(["用例ID", "测试场景", "测试步骤", "预期结果", "操作"])
         # 固定列宽，避免出现水平滚动条；刷新后保持
         header = self.cases_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         # 设置各列固定宽度（可按需微调）
-        self.cases_table.setColumnWidth(0, 50)  # 用例ID
+        self.cases_table.setColumnWidth(0, 100)  # 用例ID
         self.cases_table.setColumnWidth(1, 100)  # 测试场景
         self.cases_table.setColumnWidth(2, 100)  # 测试步骤
         self.cases_table.setColumnWidth(3, 100)  # 预期结果
-        self.cases_table.setColumnWidth(4, 100)   # 案例操作
+        self.cases_table.setColumnWidth(4, 40)   # 案例操作
         self.cases_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.cases_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.cases_table.itemClicked.connect(self.on_case_selected)
         splitter.addWidget(self.cases_table)
 
         # 左侧固定
-        self.cases_table.setFixedWidth(450)
+        self.cases_table.setFixedWidth(455)
 
         # 右侧执行区固定宽度，并让内部控件自动换行
         self.execution_widget = TestCaseExecutionWidget(self.db)

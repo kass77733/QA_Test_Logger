@@ -123,11 +123,13 @@ class TestCaseExecutionWidget(QWidget):
         # 实际结果
         execution_layout.addWidget(QLabel("实际结果:"))
         self.actual_result_edit = QTextEdit()
+        self.actual_result_edit.setAcceptRichText(False)  # 去掉源格式，只要文本
         execution_layout.addWidget(self.actual_result_edit)
         
         # 备注
         execution_layout.addWidget(QLabel("备注:"))
         self.notes_edit = QTextEdit()
+        self.notes_edit.setAcceptRichText(False)  # 去掉源格式，只要文本
         execution_layout.addWidget(self.notes_edit)
         
         # 图片列表
