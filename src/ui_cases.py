@@ -571,8 +571,12 @@ class TestCasesTab(QWidget):
                 # 清空表格
                 self.cases_table.setRowCount(0)
                 
-                # 刷新下拉框
-                self.refresh_collection_combo()
+                # 刷新下拉框（保持项目ID筛选）
+                current_project = self.project_combo.currentText()
+                if current_project != "-- 请选择项目ID --":
+                    self.refresh_collection_combo(current_project)
+                else:
+                    self.refresh_collection_combo()
                 
                 # 通知主窗口刷新历史记录界面
                 if self.collection_imported:
